@@ -1,0 +1,10 @@
+/* $FORGE brand tokens — source of truth: apps/arcade/public/sol.css */
+:root {
+  --forge-violet: #9945FF;
+  --forge-indigo: #7B61FF;
+  --forge-mint:   #14F195;
+  --forge-deep:   #6D28D9;
+  --forge-bg:     #08090D;
+  --forge-grad:      linear-gradient(120deg, #9945FF 0%, #7B61FF 35%, #14F195 100%);
+  --forge-text-grad: linear-gradient(100deg, #b98cff 0%, #9945FF 20%, #7B61FF 44%, #38d9c4 74%, #14F195 100%);
+}

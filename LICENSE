@@ -1,0 +1,13 @@
+Copyright (c) 2026 Starforge. All rights reserved.
+
+This repository is published so that its source can be read and reviewed.
+No license is granted to use, copy, modify, merge, publish, distribute,
+sublicense or sell any part of it, in source or compiled form, without
+prior written permission from the copyright holder.
+
+Third-party components keep their own licenses; see the LICENSE files next
+to them (for example apps/arcade/vendor and apps/arcade/build).
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
