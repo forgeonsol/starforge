@@ -1,0 +1,320 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import "./landing.css";
+
+/* Game sprites are pre-sized static WebP files served as-is, so plain <img> is intentional. */
+/* eslint-disable @next/next/no-img-element */
+
+type Lang = "en" | "zh";
+type SiteCopy = {
+  nav: [string, string, string]; play: string; eyebrow: string; headline: string; intro: string; scroll: string;
+  band: [string, string, string, string]; sectionLabel: string; sectionTitle: string; sectionIntro: string;
+  stages: [string, string, string][]; hangarTag: string; hangarTitle: string; hangarText: string; hangarCta: string;
+  worldTag: string; worldTitle: string; worlds: [string, string, string][]; seasonTag: string; seasonTitle: string;
+  seasonText: string; seasonCta: string; controlsTag: string; controlsTitle: string; controls: [string, string][];
+  finalTitle: string; finalText: string; footer: string;
+};
+
+const copy = {
+  en: {
+    nav: ["Game systems", "Sectors", "Rewards"],
+    play: "Play the arena",
+    eyebrow: "A LIVE AI SURVIVAL ARCADE",
+    headline: "The arena learns.\nCan you keep up?",
+    intro: "Fight a rogue intelligence, break through evolving boss rounds, and build a ship that looks like yours. Every run leaves a mark.",
+    scroll: "Scroll to explore",
+    band: ["40 ship skins", "8 projectile styles", "4 evolving sectors", "Boss every 40 sec"],
+    sectionLabel: "THE LOOP",
+    sectionTitle: "A new problem every 40 seconds.",
+    sectionIntro: "Short runs. Big decisions. The breach adapts while you do.",
+    stages: [
+      ["01 / SURVIVE", "Keep moving", "Read the pattern, collect signal shards, and stay one step ahead of the swarm."],
+      ["02 / ADAPT", "Rebuild in the field", "Choose a weapon upgrade after each breach. Your build changes the way the next fight feels."],
+      ["03 / BREAK", "Meet the architect", "Telegraphed charges, spreading volleys, and summoned enemies turn every boss into a new puzzle."],
+    ],
+    hangarTag: "YOUR SHIP, YOUR SIGNAL",
+    hangarTitle: "Forty silhouettes.\nOne is yours.",
+    hangarText: "Earn a new hangar skin for every seven minutes of total survival time. Unlock ten through play, then hunt down thirty more in the shop. Pair your ship with eight projectile shapes and colorways.",
+    hangarCta: "Explore the hangar",
+    worldTag: "FOUR SECTORS · FOUR RULESETS",
+    worldTitle: "The map changes the fight.",
+    worlds: [
+      ["01", "Rust Belt", "Open lanes. Learn the breach."],
+      ["02", "Neon Gardens", "Timing rings cut across the field."],
+      ["04", "Abyss Reactor", "Moving rifts punish the middle."],
+      ["07", "Orbit of Silence", "Gravity bends your route."],
+    ],
+    seasonTag: "THE DAILY CIRCUIT",
+    seasonTitle: "A board worth climbing.",
+    seasonText: "Post your best run, see where you stand, and take your squad into a shared boss raid. Seasonal prizes are clear, visible, and earned in play.",
+    seasonCta: "See the arena",
+    controlsTag: "READY WHEN YOU ARE",
+    controlsTitle: "Easy to enter. Hard to outlast.",
+    controls: [["W A S D", "Move"], ["SPACE", "Auto-fire"], ["B", "Overclock pulse"]],
+    finalTitle: "The next breach is yours.",
+    finalText: "Pick a rig. Learn the tells. Stay for one more round.",
+    footer: "An original survival arcade about a network that keeps learning.",
+  },
+  zh: {
+    nav: ["玩法系统", "区域地图", "赛季奖励"],
+    play: "进入竞技场",
+    eyebrow: "实时 AI 生存街机",
+    headline: "竞技场正在进化。\n你能跟上吗？",
+    intro: "迎战失控智能，突破不断进化的首领回合，打造专属战舰。每一场战斗都会留下你的印记。",
+    scroll: "向下探索",
+    band: ["40 款战舰外观", "8 种弹药形态", "4 个进化区域", "每 40 秒迎战首领"],
+    sectionLabel: "核心循环",
+    sectionTitle: "每 40 秒，迎来新的难题。",
+    sectionIntro: "短时战斗，关键抉择。裂隙会和你一起进化。",
+    stages: [
+      ["01 / 生存", "保持移动", "观察攻击规律，收集信号碎片，永远快蜂群一步。"],
+      ["02 / 应变", "战场中重组", "每次裂隙升级后选择武器强化，让下一场战斗焕然一新。"],
+      ["03 / 突破", "直面架构师", "蓄力冲撞、扇形弹幕与召唤敌群，让每个首领都成为新谜题。"],
+    ],
+    hangarTag: "你的战舰，你的信号",
+    hangarTitle: "四十种外观，\n哪款属于你？",
+    hangarText: "累计生存每满 7 分钟，即可获得一款新外观。通过游戏解锁 10 款，再从商店收集另外 30 款。还可搭配 8 种弹体形状与配色。",
+    hangarCta: "探索机库",
+    worldTag: "四个区域 · 四种规则",
+    worldTitle: "地图会改变战局。",
+    worlds: [
+      ["01", "锈带", "开阔航道，学习裂隙规律。"],
+      ["02", "霓虹花园", "计时光环横穿战场。"],
+      ["04", "深渊反应堆", "移动裂隙惩罚中央区域。"],
+      ["07", "寂静轨道", "重力会改变你的路线。"],
+    ],
+    seasonTag: "每日竞速榜",
+    seasonTitle: "值得攀登的排行榜。",
+    seasonText: "提交个人最佳成绩，查看名次，与小队共同挑战在线首领。赛季奖励公开透明，靠实力赢得。",
+    seasonCta: "查看竞技场",
+    controlsTag: "随时准备出发",
+    controlsTitle: "容易上手，难以坚持到底。",
+    controls: [["W A S D", "移动"], ["空格", "自动射击"], ["B", "超频脉冲"]],
+    finalTitle: "下一道裂隙，由你攻破。",
+    finalText: "选择机体，读懂预警，再坚持一个回合。",
+    footer: "关于不断进化的网络与生存挑战的原创街机游戏。",
+  },
+} satisfies Record<Lang, SiteCopy>;
+
+const shipShowcase = [1, 4, 12, 21, 27, 33, 36, 40, 7, 18];
+const marqueeShips = Array.from({ length: 20 }, (_, i) => i + 1);
+const sectorArt = ["rust", "neon", "abyss", "orbit"];
+const stageArt = ["/hero-fighter-v13.webp", "/assets/modules/module-03.webp", "/boss-manta-v13.webp"];
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function ThemeIcon() {
+  return (
+    <>
+      <svg className="i-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.4 14.6A8.5 8.5 0 0 1 9.4 3.6a8.5 8.5 0 1 0 11 11Z" /></svg>
+      <svg className="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" /></svg>
+    </>
+  );
+}
+
+export default function Home() {
+  const [lang, setLang] = useState<Lang>("en");
+  const [ship, setShip] = useState(0);
+  const rootRef = useRef<HTMLElement>(null);
+  const t = copy[lang];
+
+  // Restore the saved language (shared with the game) after hydration.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      try { if (localStorage.getItem("signal-language") === "zh") setLang("zh"); } catch {}
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Scroll-driven reveals and the hero "device" zoom.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const nodes = root.querySelectorAll<HTMLElement>("[data-reveal]");
+    if (reduce || !("IntersectionObserver" in window)) { nodes.forEach((n) => n.classList.add("in")); return; }
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
+    nodes.forEach((n) => io.observe(n));
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const p = Math.min(1, Math.max(0, window.scrollY / (window.innerHeight * 0.9)));
+        root.style.setProperty("--hero-p", p.toFixed(3));
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { io.disconnect(); window.removeEventListener("scroll", onScroll); cancelAnimationFrame(frame); };
+  }, []);
+
+  // Hangar turntable.
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => setShip((s) => (s + 1) % shipShowcase.length), 2600);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const changeLanguage = (next: Lang) => {
+    setLang(next);
+    try { localStorage.setItem("signal-language", next); } catch {}
+  };
+  const toggleTheme = () => {
+    const el = document.documentElement;
+    const current = el.dataset.theme || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = current === "dark" ? "light" : "dark";
+    el.dataset.theme = next;
+    try { localStorage.setItem("signal-theme", next); } catch {}
+  };
+
+  const [headA, headB] = t.headline.split("\n");
+  const [hangarA, hangarB] = t.hangarTitle.split("\n");
+
+  return (
+    <main className="landing" lang={lang} ref={rootRef}>
+      <header className="l-nav">
+        <div className="l-nav-inner">
+          <a className="wordmark" href="#top" aria-label="Signal Protocol home"><span className="mark">N/</span><span>SIGNAL PROTOCOL<small>NEURAL DRIFT</small></span></a>
+          <nav aria-label={lang === "en" ? "Main navigation" : "主导航"}>
+            <a href="#systems">{t.nav[0]}</a><a href="#sectors">{t.nav[1]}</a><a href="#season">{t.nav[2]}</a>
+          </nav>
+          <div className="l-actions">
+            <button type="button" className="icon-pill" onClick={toggleTheme} aria-label={lang === "en" ? "Toggle light or dark appearance" : "切换浅色或深色外观"}><ThemeIcon /></button>
+            <div className="lang-switch" role="group" aria-label="Language">
+              <button type="button" className={lang === "en" ? "selected" : ""} aria-pressed={lang === "en"} onClick={() => changeLanguage("en")}>EN</button>
+              <button type="button" className={lang === "zh" ? "selected" : ""} aria-pressed={lang === "zh"} onClick={() => changeLanguage("zh")}>中文</button>
+            </div>
+            <a className="btn btn-sm" href="/game.html">{t.play}</a>
+          </div>
+        </div>
+      </header>
+
+      <section className="l-hero" id="top">
+        <div className="l-hero-copy">
+          <span className="chip"><i />{t.eyebrow}</span>
+          <h1><span>{headA}</span>{headB && <span className="grad">{headB}</span>}</h1>
+          <p>{t.intro}</p>
+          <div className="l-cta-row">
+            <a href="/game.html" className="btn btn-lg">{t.play}</a>
+            <a className="link" href="#systems">{t.scroll} <span aria-hidden="true">›</span></a>
+          </div>
+        </div>
+        <div className="l-device" aria-hidden="true">
+          <div className="l-device-screen">
+            <img src="/arena-hero.webp" alt="" fetchPriority="high" />
+            <div className="l-device-hud"><span><i />NEURAL DRIFT</span><span>SEASON 01</span><span>LIVE SIMULATION</span></div>
+          </div>
+        </div>
+        <div className="l-hero-coordinate">NEURAL DRIFT <span>·</span> SEASON 01 <span>·</span> LIVE SIMULATION</div>
+      </section>
+
+      <section className="l-band" aria-label={lang === "en" ? "Game highlights" : "游戏特色"}>
+        {t.band.map((item, i) => (
+          <div key={item} data-reveal style={{ transitionDelay: `${i * 70}ms` }}><b>{pad(i + 1)}</b><span>{item}</span></div>
+        ))}
+      </section>
+
+      <section className="l-section" id="systems">
+        <div className="l-heading center" data-reveal>
+          <span className="eyebrow">{t.sectionLabel}</span>
+          <h2>{t.sectionTitle}</h2>
+          <p>{t.sectionIntro}</p>
+        </div>
+        <div className="l-stages">
+          {t.stages.map(([tag, title, body], i) => (
+            <article className={`l-card stage stage-${i + 1}`} key={tag} data-reveal style={{ transitionDelay: `${i * 90}ms` }}>
+              <div className="stage-art"><img src={stageArt[i]} alt="" loading="lazy" /></div>
+              <div className="stage-copy">
+                <span className="eyebrow">{tag}</span>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="l-hangar surface-dark">
+        <div className="l-hangar-stage" data-reveal>
+          <div className="pedestal" />
+          <div className="orbit o1" /><div className="orbit o2" />
+          {shipShowcase.map((n, i) => (
+            <img key={n} className={`hero-ship ${i === ship ? "on" : ""}`} src={`/assets/ships/ship-${pad(n)}.webp`} alt="" loading={i < 2 ? "eager" : "lazy"} />
+          ))}
+          <div className="tag-chip left">HULL 04 / PRISMATIC</div>
+          <div className="tag-chip right">8 PROJECTILE CLASSES</div>
+          <div className="ship-dots" aria-hidden="true">{shipShowcase.map((n, i) => <i key={n} className={i === ship ? "on" : ""} />)}</div>
+        </div>
+        <div className="l-hangar-copy" data-reveal>
+          <span className="eyebrow">{t.hangarTag}</span>
+          <h2><span>{hangarA}</span>{hangarB && <span className="grad">{hangarB}</span>}</h2>
+          <p>{t.hangarText}</p>
+          <div className="meter">
+            <div><span>HANGAR COLLECTION</span><b>10 <i>/</i> 40</b></div>
+            <span className="meter-track"><i /></span>
+          </div>
+          <a className="link" href="/game.html#hangar">{t.hangarCta} <span aria-hidden="true">›</span></a>
+        </div>
+        <div className="l-marquee" aria-hidden="true">
+          <div className="l-marquee-track">
+            {[...marqueeShips, ...marqueeShips].map((n, i) => <img key={i} src={`/assets/ships/ship-${pad(n)}.webp`} alt="" loading="lazy" />)}
+          </div>
+        </div>
+      </section>
+
+      <section className="l-section" id="sectors">
+        <div className="l-heading split" data-reveal>
+          <div><span className="eyebrow">{t.worldTag}</span><h2>{t.worldTitle}</h2></div>
+          <a href="/game.html#sectors" className="link">{lang === "en" ? "View unlock path" : "查看解锁路线"} <span aria-hidden="true">›</span></a>
+        </div>
+        <div className="l-sectors">
+          {t.worlds.map(([level, name, description], i) => (
+            <article className={`l-sector sector-${i + 1}`} key={level} data-reveal style={{ transitionDelay: `${i * 80}ms` }}>
+              <img src={`/assets/maps/${sectorArt[i]}.webp`} alt="" loading="lazy" />
+              <span className="sector-number">{level}</span>
+              <div className="sector-copy"><small>SECTOR {level.padStart(2, "0")}</small><h3>{name}</h3><p>{description}</p></div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="l-season surface-dark" id="season">
+        <div className="l-season-art" data-reveal>
+          <div className="ring r1" /><div className="ring r2" /><div className="ring r3" />
+          <img src="/boss-manta-v13.webp" alt="" loading="lazy" />
+          <div className="season-score">01 <span>/ DAILY BOARD</span></div>
+        </div>
+        <div className="l-season-copy" data-reveal>
+          <span className="eyebrow">{t.seasonTag}</span>
+          <h2>{t.seasonTitle}</h2>
+          <p>{t.seasonText}</p>
+          <a href="/game.html#leaderboard" className="btn">{t.seasonCta}</a>
+        </div>
+      </section>
+
+      <section className="l-controls">
+        <div data-reveal><span className="eyebrow">{t.controlsTag}</span><h2>{t.controlsTitle}</h2></div>
+        <div className="keys" data-reveal>
+          {t.controls.map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}
+        </div>
+      </section>
+
+      <section className="l-final" data-reveal>
+        <h2 className="grad">{t.finalTitle}</h2>
+        <p>{t.finalText}</p>
+        <a href="/game.html" className="btn btn-lg">{t.play}</a>
+      </section>
+
+      <footer className="l-footer">
+        <div className="l-footer-row">
+          <a className="wordmark" href="#top"><span className="mark">N/</span><span>SIGNAL PROTOCOL<small>NEURAL DRIFT</small></span></a>
+          <p>{t.footer}</p>
+          <a className="link" href="/game.html">{t.play} <span aria-hidden="true">›</span></a>
+        </div>
+        <small>© 2026 SIGNAL PROTOCOL · SEASON REWARDS ARE IN-GAME ITEMS</small>
+      </footer>
+    </main>
+  );
+}

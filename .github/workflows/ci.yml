@@ -1,0 +1,22 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/arcade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - name: Server tests (built-in SQLite, no install)
+        run: node scripts/test-forge-server.mjs
+      - name: Syntax check for browser scripts
+        run: for f in public/*.js; do node --check "$f"; done
+      - name: No inline scripts (CSP)
+        run: "! grep -nE '<script>[^<]' public/*.html"

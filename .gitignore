@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+.sites-runtime/
+.openai/
+.next/
+.vinext/
+dist/
+.env*
+.DS_Store
+*.pem

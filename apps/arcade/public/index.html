@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>$FORGE · Starforge</title>
+<meta name="description" content="$FORGE — a browser arcade shooter in chrome and obsidian. Hold the forge, break three bosses, build your hull.">
+<meta name="theme-color" content="#060607">
+<link rel="icon" href="favicon.svg">
+<script src="storage-shim.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #060607; --bg-2: #0c0c0e; --surface: #111114; --line: rgba(255,255,255,.09); --line-2: rgba(255,255,255,.16);
+  --text: #f4f4f2; --text-2: #a3a3a8; --text-3: #6d6d73; --paper: #ecebe7; --paper-2: #f6f5f2; --ink: #0b0b0c;
+  --signal: #ff4a2e; --mint: #9ff2c4; --ice: #cfe3ff;
+  --display: "Geist", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ease: cubic-bezier(.16,.84,.24,1); --ease-io: cubic-bezier(.7,0,.2,1);
+  --gutter: clamp(16px, 4vw, 56px); --max: 1360px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #060607; } }
+:root[data-theme="dark"] { --bg: #060607; }
+* { box-sizing: border-box; }
+html { scroll-behavior: auto; -webkit-text-size-adjust: 100%; }
+html, body { overscroll-behavior: none; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.55 var(--display); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+img { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; }
+::selection { background: var(--text); color: var(--ink); }
+.wrap { width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); }
+.mono, .label { font: 500 11px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); }
+.label { display: inline-flex; align-items: center; gap: 10px; }
+.label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--text); box-shadow: 0 0 12px rgba(255,255,255,.6); }
+.label.red::before { background: var(--signal); box-shadow: 0 0 12px var(--signal); }
+
+/* header */
+.top { position: fixed; inset: 0 0 auto 0; z-index: 50; transition: background .5s var(--ease), border-color .5s var(--ease), transform .6s var(--ease); border-bottom: 1px solid transparent; }
+.top.scrolled { background: rgba(6,6,7,.72); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); border-bottom-color: var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 24px; height: 72px; }
+.brand { display: flex; align-items: center; gap: 12px; font: 800 20px/1 var(--display); letter-spacing: -.04em; }
+.brand img { width: 38px; height: 38px; transition: transform .7s var(--ease), filter .5s; }
+.brand:hover img { transform: rotate(-10deg) scale(1.08); filter: drop-shadow(0 0 12px rgba(255,74,46,.55)); }
+.brand small { display: block; margin-top: 4px; font: 500 9.5px/1 var(--mono); letter-spacing: .16em; color: var(--text-3); }
+.top nav { display: flex; gap: 4px; margin: 0 auto; }
+.top nav a { padding: 9px 14px; border-radius: 999px; font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); transition: color .3s, background .3s; }
+.top nav a:hover, .top nav a.on { color: var(--text); background: rgba(255,255,255,.07); }
+.lang { display: flex; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px; }
+.lang button { border: 0; background: none; padding: 6px 10px; border-radius: 999px; font: 500 10.5px/1 var(--mono); letter-spacing: .1em; color: var(--text-3); cursor: pointer; transition: .3s; }
+.lang button[aria-pressed="true"] { background: var(--text); color: var(--ink); }
+.btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 12px; height: 48px; padding: 0 24px; border-radius: 999px; background: var(--text); color: var(--ink); font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; overflow: hidden; isolation: isolate; transition: transform .5s var(--ease); white-space: nowrap; }
+.btn::after { content: ""; position: absolute; inset: 0; z-index: -1; background: #fff; transform: translateY(101%); transition: transform .55s var(--ease); border-radius: inherit; }
+.btn:hover { transform: translateY(-2px); }
+.btn:hover::after { transform: translateY(0); }
+.btn .arr { display: inline-block; transition: transform .5s var(--ease); }
+.btn:hover .arr { transform: translateX(4px); }
+.btn.small { height: 38px; padding: 0 18px; font-size: 11px; }
+.btn.ghost { background: transparent; color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+.btn.ghost::after { background: rgba(255,255,255,.08); }
+
+/* hero */
+.hero { position: relative; min-height: 100svh; display: flex; align-items: flex-end; overflow: hidden; }
+#stage { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; display: block; pointer-events: none; }
+.hero .fallback { position: absolute; right: 6%; top: 18%; width: min(52vw, 640px); opacity: 0; }
+.no-gl .hero .fallback { opacity: 1; }
+.hero::after { content: ""; position: absolute; z-index: 2; inset: auto 0 0 0; height: 34%; background: linear-gradient(to top, var(--bg), rgba(6,6,7,0)); pointer-events: none; }
+.hero .wrap { position: relative; z-index: 3; padding-top: 72vh; padding-bottom: clamp(28px, 5vh, 56px); pointer-events: none; }
+.hero .wrap a, .hero .wrap button { pointer-events: auto; }
+.hero-mark { position: absolute; z-index: 1; left: 0; right: 0; top: 47%; transform: translateY(-58%); display: flex; justify-content: center; pointer-events: none; }
+.wordmark { margin: 0; font: 900 calc((100vw - 2 * var(--gutter)) / 3.62)/.8 var(--display); letter-spacing: -.075em; display: flex; overflow: hidden; padding: .02em .04em .05em 0; white-space: nowrap; color: var(--text); }
+.wordmark span { display: inline-block; transform: translateY(105%); transition: transform 1.2s var(--ease); }
+.ready .wordmark span { transform: none; }
+.wordmark span:nth-child(2) { transition-delay: .06s; } .wordmark span:nth-child(3) { transition-delay: .12s; } .wordmark span:nth-child(4) { transition-delay: .18s; } .wordmark span:nth-child(5) { transition-delay: .24s; } .wordmark span:nth-child(6) { transition-delay: .3s; }
+.hero-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: end; margin-top: 18px; }
+.lede { margin: 0; max-width: 560px; font: 400 clamp(18px, 1.6vw, 22px)/1.45 var(--display); color: var(--text-2); letter-spacing: -.01em; }
+.lede b { color: var(--text); font-weight: 500; }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.ticker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 36px; border-top: 1px solid var(--line); }
+.ticker div { padding: 16px 0 0; }
+.ticker b { display: block; font: 700 clamp(26px, 2.8vw, 40px)/1 var(--display); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.ticker span { display: block; margin-top: 8px; }
+.scroll-cue { position: absolute; z-index: 3; right: var(--gutter); top: 50%; writing-mode: vertical-rl; display: flex; align-items: center; gap: 12px; color: var(--text-3); }
+.scroll-cue i { width: 1px; height: 64px; background: linear-gradient(var(--text), transparent); animation: cue 2.4s var(--ease-io) infinite; transform-origin: top; }
+@keyframes cue { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+.hud-tag { position: absolute; z-index: 3; font: 500 10px/1.5 var(--mono); letter-spacing: .14em; color: var(--text-3); text-transform: uppercase; pointer-events: none; }
+.hud-tag b { display: block; color: var(--text); font-weight: 500; }
+.hud-tag.t1 { top: 112px; right: var(--gutter); text-align: right; }
+.hud-tag.t2 { top: 112px; left: var(--gutter); }
+
+/* reveal system */
+.rv { opacity: 0; transform: translateY(28px); transition: opacity 1s var(--ease), transform 1.1s var(--ease); transition-delay: var(--d, 0s); }
+.rv.in { opacity: 1; transform: none; }
+.mask { overflow: hidden; display: block; }
+.mask > span { display: inline-block; transform: translateY(105%); transition: transform 1.1s var(--ease); transition-delay: var(--d, 0s); }
+.in .mask > span, .mask.in > span { transform: none; }
+
+section { position: relative; }
+.sec { padding: clamp(96px, 14vw, 180px) 0 0; }
+.sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: end; margin-bottom: clamp(40px, 6vw, 72px); }
+h2 { margin: 18px 0 0; font: 800 clamp(40px, 6.2vw, 92px)/.92 var(--display); letter-spacing: -.055em; }
+.sec-head p { margin: 0; max-width: 460px; justify-self: end; color: var(--text-2); font-size: clamp(16px, 1.3vw, 18px); }
+
+/* manifesto */
+.manifesto { padding-top: clamp(96px, 12vw, 160px); }
+.manifesto > p { margin: 0; font: 500 clamp(28px, 4.2vw, 62px)/1.06 var(--display); letter-spacing: -.045em; max-width: 1180px; }
+.manifesto > p .w { display: inline-block; opacity: .14; transition: opacity .6s var(--ease); }
+.manifesto > p .w.on { opacity: 1; }
+.manifesto > p em { font-style: normal; color: var(--signal); }
+
+/* spec card (light) */
+.spec-card { margin-top: clamp(64px, 9vw, 120px); background: var(--paper); color: var(--ink); border-radius: 28px; padding: clamp(24px, 4vw, 56px); display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(24px, 4vw, 64px); }
+.spec-card .label { color: #77777c; } .spec-card .label::before { background: var(--ink); box-shadow: none; }
+.spec-card h3 { margin: 18px 0 14px; font: 800 clamp(30px, 3.4vw, 50px)/.98 var(--display); letter-spacing: -.05em; }
+.spec-card > div > p { margin: 0; color: #55555b; max-width: 420px; }
+.spec { margin: 0; }
+.spec div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 20px; padding: 16px 0; border-top: 1px solid rgba(11,11,12,.12); }
+.spec div:last-child { border-bottom: 1px solid rgba(11,11,12,.12); }
+.spec dt { font: 500 11px/1.6 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #77777c; }
+.spec dd { margin: 0; font: 500 17px/1.4 var(--display); letter-spacing: -.01em; }
+
+/* run beats */
+.beats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.beat { position: relative; border-radius: 24px; background: var(--surface); border: 1px solid var(--line); padding: 22px; min-height: 460px; display: flex; flex-direction: column; overflow: hidden; transform-style: preserve-3d; transition: border-color .5s, transform .6s var(--ease); }
+.beat:hover { border-color: var(--line-2); }
+.beat .num { display: flex; justify-content: space-between; }
+.beat .art { flex: 1; display: grid; place-items: center; position: relative; margin: 10px 0; }
+.beat .art::before { content: ""; position: absolute; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.08), transparent 65%); }
+.beat .art img { width: 72%; max-width: 260px; transition: transform 1s var(--ease); filter: drop-shadow(0 30px 40px rgba(0,0,0,.6)); }
+.beat:hover .art img { transform: translateY(-8px) scale(1.04); }
+.beat h3 { margin: 0 0 8px; font: 700 26px/1.05 var(--display); letter-spacing: -.04em; }
+.beat p { margin: 0; color: var(--text-2); font-size: 15px; }
+
+/* bosses */
+.bosses-list { border-top: 1px solid var(--line); }
+.boss { display: grid; grid-template-columns: 80px minmax(0, 1.2fr) minmax(0, 1fr) 300px; align-items: center; gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); position: relative; cursor: default; }
+.boss::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(255,74,46,.08), transparent 70%); opacity: 0; transition: opacity .6s var(--ease); }
+.boss:hover::before { opacity: 1; }
+.boss h3 { margin: 0; font: 800 clamp(34px, 5vw, 76px)/.9 var(--display); letter-spacing: -.06em; transition: transform .7s var(--ease), color .4s; }
+.boss:hover h3 { transform: translateX(14px); }
+.boss p { margin: 0; color: var(--text-2); max-width: 360px; }
+.boss .gimg { width: 300px; height: 210px; position: relative; overflow: hidden; }
+.boss .gimg canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: pan-y; }
+.boss .gimg canvas:active { cursor: grabbing; }
+.boss .gimg.live img { display: none; }
+.boss .gimg::after { content: "DRAG"; position: absolute; right: 6px; bottom: 6px; font: 500 9px/1 var(--mono); letter-spacing: .16em; color: var(--text-3); opacity: 0; transition: opacity .4s; pointer-events: none; }
+.boss:hover .gimg.live::after { opacity: 1; }
+.boss .gimg img { position: absolute; left: 50%; top: 50%; width: 260px; height: 260px; transform: translate(-50%, -50%) scale(.92); transition: transform .9s var(--ease), filter .6s; filter: grayscale(.35) brightness(.9); }
+.boss:hover .gimg img { transform: translate(-50%, -50%) scale(1.06); filter: none; }
+.boss .tell { display: block; margin-top: 10px; color: var(--signal); }
+
+/* pilot strip */
+.pilot { margin-top: 14px; border-radius: 28px; overflow: hidden; position: relative; background: #08080a; border: 1px solid var(--line); aspect-ratio: 16 / 6.2; min-height: 300px; }
+.pilot canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pilot .copy { position: absolute; left: clamp(20px, 3vw, 40px); top: clamp(20px, 3vw, 36px); max-width: 420px; z-index: 2; }
+.pilot .copy h3 { margin: 14px 0 10px; font: 800 clamp(28px, 3.4vw, 52px)/.95 var(--display); letter-spacing: -.05em; }
+.pilot .copy p { margin: 0; color: var(--text-2); }
+.pilot .go { position: absolute; right: clamp(20px, 3vw, 36px); top: clamp(20px, 3vw, 36px); z-index: 2; }
+
+/* hangar marquee */
+.marquee { position: relative; overflow: hidden; -webkit-mask: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+.track { display: flex; gap: 14px; width: max-content; animation: slide 70s linear infinite; padding: 7px 0; }
+.track.rev { animation-direction: reverse; animation-duration: 84s; }
+.marquee:hover .track { animation-play-state: paused; }
+@keyframes slide { to { transform: translateX(-50%); } }
+.hull { width: 230px; flex: none; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); padding: 14px; transition: border-color .4s, transform .6s var(--ease); }
+.hull:hover { border-color: var(--line-2); transform: translateY(-6px); }
+.hull .im { aspect-ratio: 1; border-radius: 14px; background: radial-gradient(circle at 50% 60%, #1b1b1f, #0a0a0b 70%); display: grid; place-items: center; overflow: hidden; }
+.hull img { width: 92%; transition: transform .9s var(--ease); }
+.hull:hover img { transform: scale(1.08) rotate(-3deg); }
+.hull .meta { display: flex; justify-content: space-between; margin-top: 12px; }
+.hull .meta b { font: 600 15px/1.2 var(--display); letter-spacing: -.02em; }
+
+/* armory */
+.mods { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; }
+.mod { background: var(--bg); padding: 18px; aspect-ratio: .82; display: flex; flex-direction: column; transition: background .5s; position: relative; }
+.mod:hover { background: #0e0e11; }
+.mod .im { flex: 1; display: grid; place-items: center; }
+.mod img { width: 78%; transition: transform 1.1s var(--ease); }
+.mod:hover img { transform: translateY(-6px) rotate(8deg) scale(1.06); }
+.mod b { font: 600 15px/1.2 var(--display); letter-spacing: -.02em; }
+.mod small { display: block; margin-top: 4px; color: var(--text-2); font-size: 13px; }
+
+/* sectors */
+.maps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.map { position: relative; border-radius: 24px; overflow: hidden; border: 1px solid var(--line); aspect-ratio: 16 / 10; background: #050506; }
+.map img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 1.6s var(--ease); }
+.map:hover img { transform: scale(1.06); }
+.map::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(6,6,7,.92), rgba(6,6,7,0) 55%); }
+.map .lvl { position: absolute; top: 18px; left: 20px; z-index: 2; }
+.map .txt { position: absolute; left: 20px; right: 20px; bottom: 18px; z-index: 2; }
+.map h3 { margin: 0 0 6px; font: 800 clamp(26px, 2.8vw, 40px)/1 var(--display); letter-spacing: -.05em; }
+.map p { margin: 0; color: var(--text-2); }
+
+/* controls + finale */
+.keys { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.key { padding: 26px 0; display: flex; flex-direction: column; gap: 12px; }
+.key + .key { padding-left: 20px; border-left: 1px solid var(--line); }
+kbd { align-self: flex-start; font: 500 12px/1 var(--mono); letter-spacing: .1em; padding: 9px 12px; border-radius: 10px; background: #141417; border: 1px solid var(--line-2); box-shadow: 0 2px 0 rgba(255,255,255,.06), inset 0 -2px 0 rgba(0,0,0,.5); }
+.key span { color: var(--text-2); font-size: 14px; }
+.finale { padding: clamp(110px, 16vw, 220px) 0 clamp(60px, 8vw, 100px); text-align: left; }
+.finale h2 { font-size: clamp(64px, 13vw, 210px); line-height: .82; letter-spacing: -.075em; }
+.finale .row { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-top: 40px; flex-wrap: wrap; }
+.finale p { margin: 0; color: var(--text-2); font-size: 18px; }
+footer { border-top: 1px solid var(--line); padding: 26px 0 40px; }
+footer .wrap { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: center; }
+footer span { color: var(--text-3); font-size: 13px; }
+
+/* cursor light */
+.glow-cursor { position: fixed; left: 0; top: 0; width: 520px; height: 520px; margin: -260px 0 0 -260px; border-radius: 50%; pointer-events: none; z-index: 1; background: radial-gradient(circle, rgba(255,255,255,.045), transparent 60%); transform: translate3d(-999px, -999px, 0); }
+
+/* token utility */
+.utility { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.util { position: relative; border-radius: 24px; background: var(--surface); border: 1px solid var(--line); padding: 22px; min-height: 340px; display: flex; flex-direction: column; overflow: hidden; transition: border-color .5s, transform .6s var(--ease); }
+.util:hover { border-color: var(--line-2); transform: translateY(-4px); }
+.util::before { content: ""; position: absolute; inset: -40% -40% auto auto; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.06), transparent 65%); transition: opacity .6s; }
+.util.hot::before { background: radial-gradient(circle, rgba(255,74,46,.16), transparent 65%); }
+.util .uhead { display: flex; justify-content: space-between; align-items: center; }
+.util .ic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: #16161a; border: 1px solid var(--line-2); margin: 34px 0 auto; }
+.util .ic svg { width: 26px; height: 26px; stroke: var(--text); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.util.hot .ic svg { stroke: var(--signal); }
+.util h3 { margin: 28px 0 10px; font: 700 24px/1.05 var(--display); letter-spacing: -.04em; }
+.util p { margin: 0; color: var(--text-2); font-size: 15px; }
+.util .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.util .tags span { font: 500 9.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 6px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-2); }
+.buyback { display: flex; align-items: flex-end; gap: 4px; height: 52px; margin: 30px 0 auto; }
+.buyback i { flex: 1; background: rgba(255,255,255,.14); border-radius: 2px; transform-origin: bottom; transform: scaleY(.15); transition: transform 1.2s var(--ease); }
+.buyback i:last-child { background: var(--signal); }
+.in .buyback i { transform: scaleY(1); }
+.utility-note { margin-top: 18px; color: var(--text-3); font-size: 12.5px; max-width: 760px; }
+/* token ecosystem (landing-ecosystem.js) */
+.eco-title { font-size: clamp(40px, 5.8vw, 86px); }
+.eco-card { min-height: 0; padding: 0; cursor: default; }
+.eco-card .uhead { padding: 18px 22px 0; }
+.eco-card h3, .eco-card p, .eco-card .tags { margin-left: 22px; margin-right: 22px; }
+.eco-card .tags { margin-bottom: 22px; }
+.eco-art { position: relative; height: 170px; background: radial-gradient(70% 80% at 50% 70%, rgba(255,255,255,.08), transparent 70%), #0a0a0c; border-bottom: 1px solid var(--line); overflow: hidden; }
+.eco-card.hot .eco-art { background: radial-gradient(70% 80% at 50% 80%, rgba(255,74,46,.18), transparent 70%), #0a0a0c; }
+.eco-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; transition: transform 1.2s var(--ease); animation: ecoFloat 6s ease-in-out infinite; }
+.eco-card:hover .eco-art img, .eco-card.lit .eco-art img { transform: scale(1.1) rotate(-3deg); }
+@keyframes ecoFloat { 50% { translate: 0 -7px; } }
+.eco-chart { position: absolute; inset: 10px 20px; width: calc(100% - 40px); height: calc(100% - 20px); }
+.eco-chart rect { transform-origin: bottom; transform-box: fill-box; transform: scaleY(.1); transition: transform 1s var(--ease); transition-delay: calc(var(--i) * 50ms); }
+.in .eco-chart rect, .eco-card.in .eco-chart rect { transform: scaleY(1); }
+.eco-card.lit { border-color: var(--line-2); transform: translateY(-4px); }
+.eco-badge { font: 500 9px/1 var(--mono); letter-spacing: .14em; padding: 5px 8px; border-radius: 999px; border: 1px solid; }
+.eco-badge.demo { color: var(--mint); border-color: rgba(159,242,196,.35); }
+.eco-badge.planned { color: #ff7a3d; border-color: rgba(255,122,61,.4); }
+.eco-hub { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); border-radius: 28px; border: 1px solid var(--line); background: radial-gradient(70% 90% at 30% 50%, rgba(255,255,255,.05), transparent 70%), #08080a; overflow: hidden; }
+.eco-stage { position: relative; height: 460px; }
+.eco-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.eco-core { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(var(--pulse, 1)); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.eco-core img { width: 104px; height: 104px; filter: drop-shadow(0 0 30px rgba(255,74,46,.45)); animation: ecoSpin 9s linear infinite; }
+@keyframes ecoSpin { 0% { transform: rotateY(0); } 100% { transform: rotateY(360deg); } }
+.eco-core span { font: 700 13px/1 var(--mono); letter-spacing: .14em; }
+.eco-node { position: absolute; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px 12px 30px; border-radius: 16px; border: 1px solid var(--line); background: rgba(14,14,16,.88); color: var(--text); cursor: pointer; text-align: left; transition: border-color .4s, transform .5s var(--ease), background .4s; }
+.eco-node i { position: absolute; left: 13px; top: 17px; width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.35); transition: .4s; }
+.eco-node b { font: 700 15px/1.1 var(--display); letter-spacing: -.02em; } .eco-node small { font: 500 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.eco-node.on { border-color: var(--line-2); background: rgba(24,24,28,.95); transform: scale(1.05); } .eco-node.on i { background: var(--mint); box-shadow: 0 0 12px var(--mint); }
+.eco-node.n3.on i { background: var(--signal); box-shadow: 0 0 12px var(--signal); }
+.eco-node.n0 { left: 6%; top: 12%; } .eco-node.n1 { right: 6%; top: 12%; } .eco-node.n2 { right: 6%; bottom: 14%; } .eco-node.n3 { left: 6%; bottom: 14%; }
+.eco-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); white-space: nowrap; }
+.eco-panel { padding: 36px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; justify-content: center; }
+.eco-panel h3 { margin: 0; font: 800 clamp(30px, 3vw, 44px)/1 var(--display); letter-spacing: -.05em; }
+.eco-panel p { margin: 0; color: var(--text-2); font-size: 15px; }
+.eco-panel .btn { align-self: flex-start; margin-top: 6px; }
+.eco-panel.swap > * { animation: ecoSwap .6s var(--ease) both; } .eco-panel.swap > *:nth-child(2) { animation-delay: .05s; } .eco-panel.swap > *:nth-child(3) { animation-delay: .1s; } .eco-panel.swap > *:nth-child(4) { animation-delay: .15s; }
+@keyframes ecoSwap { from { opacity: 0; transform: translateY(10px); } }
+.eco-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border-radius: 16px; overflow: hidden; background: var(--line); }
+.eco-steps div { background: #0e0e10; padding: 12px; display: flex; flex-direction: column; gap: 6px; } .eco-steps b { font: 500 10px/1 var(--mono); color: var(--signal); letter-spacing: .1em; } .eco-steps span { font-size: 13px; color: var(--text-2); line-height: 1.35; }
+@media (max-width: 980px) { .eco-hub { grid-template-columns: 1fr; } .eco-panel { border-left: 0; border-top: 1px solid var(--line); padding: 24px; } }
+@media (max-width: 640px) { .eco-stage { height: 400px; } .eco-node { padding: 10px 10px 10px 26px; } .eco-node b { font-size: 13px; } .eco-node.n0, .eco-node.n3 { left: 3%; } .eco-node.n1, .eco-node.n2 { right: 3%; } .eco-core img { width: 76px; height: 76px; } .eco-steps { grid-template-columns: 1fr; } .eco-hint { display: none; } }
+@media (max-width: 1080px) { .utility { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .utility { grid-template-columns: 1fr; } .util { min-height: 0; } .util .ic, .buyback { margin-bottom: 0; } }
+@media (max-width: 1080px) {
+  .top nav { display: none; } .lang { margin-left: auto; }
+  .boss { grid-template-columns: 50px minmax(0, 1fr) 220px; } .boss p { grid-column: 2 / 3; } .boss .gimg { grid-row: 1 / 3; grid-column: 3; width: 220px; }
+  .mods { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .keys { grid-template-columns: repeat(3, minmax(0, 1fr)); } .key:nth-child(4) { border-left: 0; padding-left: 0; }
+}
+@media (max-width: 760px) {
+  .top .wrap { height: 62px; gap: 10px; } .brand small { display: none; } .top .btn.small { padding: 0 14px; }
+  .hero { align-items: flex-end; } .hero .wrap { padding-top: 58vh; } .hero-mark { top: 40%; }
+  .hero-row, .sec-head, .spec-card { grid-template-columns: 1fr; } .sec-head p { justify-self: start; }
+  .cta { justify-content: flex-start; }
+  .ticker { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 18px; }
+  .hud-tag, .scroll-cue { display: none; }
+  .beats { grid-template-columns: 1fr; } .beat { min-height: 380px; }
+  .boss { grid-template-columns: minmax(0, 1fr) 120px; gap: 14px; } .boss .n { display: none; } .boss h3, .boss p { grid-column: 1; } .boss .gimg { grid-column: 2; grid-row: 1 / 3; width: 120px; height: 120px; } .boss .gimg img { width: 150px; height: 150px; }
+  .pilot { aspect-ratio: auto; height: 520px; } .pilot .go { top: auto; bottom: 20px; left: 20px; right: auto; }
+  .mods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .maps { grid-template-columns: 1fr; }
+  .keys { grid-template-columns: repeat(2, minmax(0, 1fr)); } .key + .key { border-left: 0; padding-left: 0; } .key:nth-child(even) { padding-left: 16px; border-left: 1px solid var(--line); }
+  .spec div { grid-template-columns: 1fr; gap: 4px; }
+  .hull { width: 170px; }
+  .glow-cursor { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: .01s !important; }
+  .rv { opacity: 1; transform: none; } .mask > span, .wordmark span { transform: none; } .manifesto > p .w { opacity: 1; }
+}
+/* token launch layer (token-launch.js) */
+.btn.sol-cta { background: var(--sol-grad, linear-gradient(120deg, #9945FF, #7B61FF 35%, #14F195)); color: #0b0b0c; }
+.btn.sol-cta::after { background: #fff; }
+.btn.sol-cta:hover { box-shadow: 0 14px 40px -14px rgba(153,69,255,.75), 0 8px 30px -18px rgba(20,241,149,.6); }
+.soon-tag { font-style: normal; font: 500 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 4px 6px; border-radius: 999px; background: rgba(11,11,12,.85); color: #fff; }
+.btn.ghost .soon-tag { background: rgba(255,255,255,.08); color: var(--text-2); }
+.top .hdr-buy { margin-left: -12px; }
+.top .hdr-buy .soon-tag { padding: 3px 5px; font-size: 8.5px; }
+.ca-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); pointer-events: auto; }
+.chain-badge { display: inline-flex; align-items: center; gap: 7px; font: 500 10px/1 var(--mono); letter-spacing: .14em; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(153,69,255,.45); color: var(--text); }
+.chain-badge i { width: 8px; height: 8px; border-radius: 2px; transform: rotate(45deg); background: var(--sol-grad, linear-gradient(120deg, #9945FF, #14F195)); }
+.ca-code { font: 500 12px/1.3 var(--mono); color: var(--text); word-break: break-all; }
+.ca-tba { font: 500 12px/1.3 var(--mono); color: var(--text-2); }
+.ca-copy { border: 1px solid var(--line-2); background: transparent; color: var(--text); border-radius: 999px; padding: 6px 10px; font: 500 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
+.ca-copy:hover { background: rgba(255,255,255,.08); }
+.ca-status { margin-left: auto; color: var(--text-3); }
+.finale-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
+.launch-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 14px; }
+.launch-card { position: relative; border-radius: 28px; padding: clamp(22px, 3vw, 40px); border: 1px solid var(--line-2); background: radial-gradient(70% 90% at 100% 0%, rgba(153,69,255,.18), transparent 60%), radial-gradient(60% 80% at 0% 100%, rgba(20,241,149,.07), transparent 60%), #0b0b0d; display: flex; flex-direction: column; gap: 22px; overflow: hidden; }
+.launch-card.flash { animation: launchFlash 1.2s var(--ease); }
+@keyframes launchFlash { 25% { box-shadow: 0 0 0 2px rgba(153,69,255,.7), 0 0 60px -10px rgba(20,241,149,.5); } }
+.launch-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.launch-pill { display: inline-flex; align-items: center; gap: 8px; font: 600 10.5px/1 var(--mono); letter-spacing: .16em; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid var(--line-2); }
+.launch-pill i { width: 7px; height: 7px; border-radius: 50%; background: #b98cff; box-shadow: 0 0 10px #9945FF; animation: launchBeat 2s ease-in-out infinite; }
+.launch-pill.is-live i { background: #14F195; box-shadow: 0 0 10px #14F195; }
+@keyframes launchBeat { 50% { opacity: .35; } }
+.launch-h { margin: 0; font: 800 clamp(34px, 4.4vw, 64px)/.95 var(--display); letter-spacing: -.055em; }
+.launch-count { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; border-radius: 16px; overflow: hidden; background: var(--line); }
+.launch-count div { background: #0e0e11; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.launch-count b { font: 700 clamp(26px, 3vw, 40px)/1 var(--display); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.launch-ca { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--line); }
+.launch-ca-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.launch-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.launch-msg { margin: -6px 0 0; min-height: 1.3em; color: #b98cff; }
+.launch-steps { display: grid; gap: 14px; }
+.launch-step { border-radius: 22px; padding: 20px 22px; background: var(--surface); border: 1px solid var(--line); }
+.launch-step .mono { color: var(--signal); }
+.launch-step h4 { margin: 10px 0 6px; font: 700 21px/1.1 var(--display); letter-spacing: -.035em; }
+.launch-step p { margin: 0; color: var(--text-2); font-size: 15px; }
+.launch-step.wallet { background: radial-gradient(80% 120% at 100% 0%, rgba(20,241,149,.08), transparent 60%), var(--surface); }
+.launch-risk { margin-top: 18px; }
+@media (max-width: 980px) { .launch-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .top .hdr-buy { display: none; } .ca-status { margin-left: 0; width: 100%; } .launch-count div { padding: 10px; } }
+</style>
+<link rel="stylesheet" href="sol.css">
+<link rel="stylesheet" href="screens.css">
+<link rel="stylesheet" href="leaderboard.css">
+</head>
+<body>
+<div class="glow-cursor" id="glow" aria-hidden="true"></div>
+<header class="top" id="top">
+  <div class="wrap top-row">
+    <a class="brand" href="#hero" aria-label="$FORGE home"><img src="logo.svg" alt="" width="30" height="30"><span>$FORGE</span></a>
+    <nav aria-label="Sections" id="topNav"><a href="#token" data-t="navToken">Token</a><a href="#launch" data-t="navLaunch">Launch</a><a href="#leaderboard" data-t="navBoard">Leaderboard</a><a href="#run" data-t="navRun">Gameplay</a><a href="#bosses" data-t="navBoss">Bosses</a><a href="#pilot" data-t="navPilot">Pilot</a><a href="#hangar" data-t="navHangar">Hangar</a><a href="#sectors" data-t="navSectors">Sectors</a></nav>
+    <div class="top-actions">
+      <div class="lang" role="group" aria-label="Language"><button type="button" data-lang="en" aria-pressed="true">EN</button><i>/</i><button type="button" data-lang="zh" aria-pressed="false">中文</button></div>
+      <a class="top-link play" href="game.html"><span data-t="play">Play</span><span class="arr">→</span></a>
+      <button class="top-link menu-btn" type="button" id="menuBtn" aria-expanded="false" aria-controls="topNav"><span data-t="menu">Menu</span></button>
+    </div>
+  </div>
+  <div class="top-sub"><div class="wrap" id="topSub"></div></div>
+</header>
+
+<main>
+  <section class="hero" id="hero">
+    <div class="hero-mark" aria-hidden="false"><h1 class="wordmark" aria-label="$FORGE"><span>$</span><span>F</span><span>O</span><span>R</span><span>G</span><span>E</span></h1></div>
+    <canvas id="stage" aria-label="A chrome $FORGE fighter turning in a dark studio; it follows your cursor"></canvas>
+    <img class="fallback" src="assets/3d/ships/ship-01.webp" alt="">
+    <div class="hud-tag t2"><b>HULL No. 01 · SIGNAL RUNNER</b><span data-t="tag1">Chrome finish · twin drive</span></div>
+    <div class="hud-tag t1"><b id="hudCoord">X 000 · Y 000</b><span data-t="tag2">Move to steer the hull</span></div>
+    <div class="scroll-cue mono" aria-hidden="true"><i></i>SCROLL</div>
+    <div class="wrap">
+      <span class="label red rv" data-t="season">Game + token · Season one</span>
+      <div class="hero-row">
+        <p class="lede rv" style="--d:.5s"><span data-t="lede">An arcade shooter powered by $FORGE. Hold the forge against the swarm, break a boss every forty seconds, and spend the token on hulls, raids and tournaments.</span></p>
+        <div class="cta rv" style="--d:.65s"><a class="btn" href="game.html"><span data-t="launch">Launch a run</span><span class="arr">→</span></a><a class="btn ghost" href="#token"><span data-t="tokCta">Token utility</span></a></div>
+      </div>
+      <div class="ticker rv" style="--d:.8s">
+        <div><b data-count="40">0</b><span class="mono" data-t="tk1">Numbered hulls</span></div>
+        <div><b data-count="12">0</b><span class="mono" data-t="tk2">Modules</span></div>
+        <div><b data-count="100">0</b><span class="mono" data-t="tk3">Pilot missions</span></div>
+        <div><b data-count="3">0</b><span class="mono" data-t="tk4">Bosses</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="token">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><span class="label red rv" data-t="tokLabel">$FORGE token</span><h2 class="rv" style="--d:.08s" data-t="tokTitle">What the token does.</h2></div>
+        <p class="rv" style="--d:.16s" data-t="tokIntro">One token across the arena, the pilot campaign and the hangar.</p>
+      </div>
+      <div class="utility">
+        <article class="util rv tilt"><div class="uhead"><span class="mono">01</span><span class="mono" data-t="u1k">Shop</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg></div>
+          <h3 data-t="u1h">In-game purchases</h3><p data-t="u1p">Spend the token on ship skins, pilot outfits, weapon effects, map access, and other cosmetic upgrades.</p>
+          <div class="tags"><span data-t="u1a">Skins</span><span data-t="u1b">Outfits</span><span data-t="u1c">Weapon FX</span><span data-t="u1d">Maps</span></div></article>
+        <article class="util rv tilt hot" style="--d:.08s"><div class="uhead"><span class="mono">02</span><span class="mono" data-t="u2k">Compete</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 13v4M8 21h8M9 17h6"/></svg></div>
+          <h3 data-t="u2h">Competitive play</h3><p data-t="u2p">Use tokens to enter special boss raids and tournaments, with rewards for top performers.</p>
+          <div class="tags"><span data-t="u2a">Boss raids</span><span data-t="u2b">Tournaments</span><span data-t="u2c">Top rewards</span></div></article>
+        <article class="util rv tilt" style="--d:.16s"><div class="uhead"><span class="mono">03</span><span class="mono" data-t="u3k">Unlock</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/><path d="M12 15v2"/></svg></div>
+          <h3 data-t="u3h">Progression and access</h3><p data-t="u3p">Unlock premium missions, limited-time events, and seasonal content with tokens.</p>
+          <div class="tags"><span data-t="u3a">Premium missions</span><span data-t="u3b">Events</span><span data-t="u3c">Seasons</span></div></article>
+        <article class="util rv tilt hot" style="--d:.24s"><div class="uhead"><span class="mono">04</span><span class="mono" data-t="u4k">Daily</span></div>
+          <div class="buyback" aria-hidden="true"><i style="height:28%;transition-delay:0.00s"></i><i style="height:40%;transition-delay:0.05s"></i><i style="height:34%;transition-delay:0.10s"></i><i style="height:52%;transition-delay:0.15s"></i><i style="height:46%;transition-delay:0.20s"></i><i style="height:60%;transition-delay:0.25s"></i><i style="height:55%;transition-delay:0.30s"></i><i style="height:72%;transition-delay:0.35s"></i><i style="height:64%;transition-delay:0.40s"></i><i style="height:80%;transition-delay:0.45s"></i><i style="height:74%;transition-delay:0.50s"></i><i style="height:100%;transition-delay:0.55s"></i></div>
+          <h3 data-t="u4h">Daily buybacks</h3><p data-t="u4p">Allocate a portion of game fees to scheduled daily token buybacks, subject to the project’s treasury rules and available revenue.</p>
+          <div class="tags"><span data-t="u4a">Game fees</span><span data-t="u4b">Scheduled</span><span data-t="u4c">Treasury rules</span></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec stage-fit" id="leaderboard">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><span class="label idx red rv" data-t="lbLabel">Leaderboard</span><h2 class="rv" style="--d:.08s" data-t="lbTitle">Top pilots, ranked live.</h2></div>
+        <p class="rv" style="--d:.16s"><span data-t="lbIntro">Ranked by each pilot's best arena run. Finish a run and your score lands here.</span><br><a class="lb-more mono" href="game.html#leaderboard" data-t="lbMore">Full leaderboard →</a></p>
+      </div>
+      <div class="lb-stage fill rv" data-forge-board="compact"></div>
+    </div>
+  </section>
+
+  <section class="manifesto wrap" aria-label="About">
+    <span class="label idx" data-t="mLabel">The forge</span>
+    <p id="manifesto" style="margin-top:22px" data-t="manifesto">Every forty seconds the swarm gets faster. Every kill feeds the multiplier. Every bullet you skim charges the blast. And when the bell rings, something big comes through the gate.</p>
+
+    <div class="spec-card rv">
+      <div>
+        <span class="label" data-t="certLabel">Specification</span>
+        <h3 data-t="certTitle">What is forged in $FORGE</h3>
+        <p data-t="certIntro">One game, two modes, and a hangar that grows with every minute in the air. Everything runs in the browser — no install, no account.</p>
+      </div>
+      <dl class="spec">
+        <div><dt data-t="d1">Format</dt><dd data-t="v1">3D arcade survival shooter, plus a side-scrolling pilot campaign</dd></div>
+        <div><dt data-t="d2">Round</dt><dd data-t="v2">Forty seconds, then an upgrade and a boss</dd></div>
+        <div><dt data-t="d3">Hangar</dt><dd data-t="v3">Forty numbered hulls in chrome, ceramic and graphite</dd></div>
+        <div><dt data-t="d4">Armory</dt><dd data-t="v4">Twelve modules that change how you survive</dd></div>
+        <div><dt data-t="d5">Campaign</dt><dd data-t="v5">Ten worlds, one hundred missions, skills that carry into the arena</dd></div>
+        <div><dt data-t="d6">Controls</dt><dd data-t="v6">Keyboard or touch</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="sec stage-fit" id="run">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><span class="label idx rv" data-t="runLabel">A run</span><h2 class="rv" style="--d:.08s" data-t="runTitle">Three movements, until the hull gives out.</h2></div>
+        <p class="rv" style="--d:.16s" data-t="runIntro">Chain kills for a score multiplier, skim bullets to charge the forge blast, and dash straight through anything small.</p>
+      </div>
+      <div class="beats fill">
+        <article class="beat rv tilt"><div class="num"><span class="mono">01</span><span class="mono" data-t="b1t">Swarm</span></div><div class="art"><img src="assets/3d/foes/foe-1-0.webp" alt="" loading="lazy" decoding="async"></div><h3 data-t="b1h">Hold the line</h3><p data-t="b1p">Shard drones swarm, Rams lock a lane and lunge, Leeches drain your heat when they get close.</p></article>
+        <article class="beat rv tilt" style="--d:.1s"><div class="num"><span class="mono">02</span><span class="mono" data-t="b2t">Bell</span></div><div class="art"><img src="assets/3d/modules/module-03.webp" alt="" loading="lazy" decoding="async"></div><h3 data-t="b2h">Choose an upgrade</h3><p data-t="b2p">At the bell you take one of three: another barrel, a hotter trigger, piercing rounds, a wing drone or more hull.</p></article>
+        <article class="beat rv tilt" style="--d:.2s"><div class="num"><span class="mono">03</span><span class="mono" data-t="b3t">Boss</span></div><div class="art"><img src="assets/3d/guardians/guardian-2-0.webp" alt="" loading="lazy" decoding="async"></div><h3 data-t="b3h">Break the boss</h3><p data-t="b3p">Every charge is telegraphed. Below half health a boss turns red and changes its pattern.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec stage-fit" id="bosses">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><span class="label idx red rv" data-t="bossLabel">The three</span><h2 class="rv" style="--d:.08s" data-t="bossTitle">Bosses of the forge.</h2></div>
+        <p class="rv" style="--d:.16s" data-t="bossIntro">Each one has a tell. Learn it and you will always find room to move.</p>
+      </div>
+      <div class="bosses-list fill">
+        <article class="boss rv" data-g="0"><span class="mono n">I</span><h3>Anvil Ray</h3><p><span data-t="r1">Wide volleys, then a spinning ring of bolts with a single gap.</span><span class="mono tell" data-t="r1t">Tell · wings flare</span></p><div class="gimg"><img loading="lazy" decoding="async" alt="Anvil Ray" src="assets/3d/guardians/guardian-0-0.webp"></div></article>
+        <article class="boss rv" data-g="1"><span class="mono n">II</span><h3>Twin Hammer</h3><p><span data-t="r2">Locks a lane, flashes, and charges straight down it.</span><span class="mono tell" data-t="r2t">Tell · lane flash</span></p><div class="gimg"><img loading="lazy" decoding="async" alt="Twin Hammer" src="assets/3d/guardians/guardian-1-0.webp"></div></article>
+        <article class="boss rv" data-g="2"><span class="mono n">III</span><h3>Bellows</h3><p><span data-t="r3">Breathes out Leech swarms that sap your heat.</span><span class="mono tell" data-t="r3t">Tell · plates open</span></p><div class="gimg"><img loading="lazy" decoding="async" alt="Bellows" src="assets/3d/guardians/guardian-2-0.webp"></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec stage-fit" id="pilot" aria-label="Pilot campaign">
+    <div class="wrap">
+      <div class="pilot rv fill" id="pilotStrip">
+        <canvas id="pilotCv" aria-label="The pilot runs through a parallax world"></canvas>
+        <div class="copy"><span class="label idx" data-t="pLabel">Second mode</span><h3 data-t="pTitle">Then step out of the cockpit.</h3><p data-t="pText">Ten worlds and one hundred missions on foot. Every skill you train carries back into the arena.</p></div>
+        <a class="btn ghost small go" href="game.html#campaign"><span data-t="pGo">Open the campaign</span><span class="arr">→</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec stage-fit" id="hangar">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><span class="label idx rv" data-t="hangarLabel">The hangar</span><h2 class="rv" style="--d:.08s" data-t="hangarTitle">Forty hulls, each numbered.</h2></div>
+        <p class="rv" style="--d:.16s" data-t="hangarIntro">Ten are earned in flight, one every seven minutes. The other thirty wait in the shop.</p>
+      </div>
+    </div>
+    <div class="marquees fill"><div class="marquee rv"><div class="track" id="trackA"></div></div></div>
+  </section>
+
+  <section class="sec stage-fit" id="armory">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><span class="label idx rv" data-t="armoryLabel">The armory</span><h2 class="rv" style="--d:.08s" data-t="armoryTitle">Twelve modules.</h2></div>
+        <p class="rv" style="--d:.16s" data-t="armoryIntro">Unlock a module once and it stays with you for every run.</p>
+      </div>
+      <div class="mods rv fill" id="mods"></div>
+    </div>
+  </section>
+
+  <section class="sec stage-fit" id="sectors">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><span class="label idx rv" data-t="sectorLabel">Sectors</span><h2 class="rv" style="--d:.08s" data-t="sectorTitle">Four skies, four rules.</h2></div>
+        <p class="rv" style="--d:.16s" data-t="sectorIntro">Reach the level once and the sector stays open.</p>
+      </div>
+      <div class="maps fill">
+        <article class="map rv"><img src="assets/3d/maps/rust.webp" alt="" loading="lazy" decoding="async"><span class="label lvl" data-t="lv1">From level 1</span><div class="txt"><h3 data-t="m1">Rust Belt</h3><p data-t="m1p">Open lanes and drifting rock. Where every pilot starts.</p></div></article>
+        <article class="map rv" style="--d:.08s"><img src="assets/3d/maps/neon.webp" alt="" loading="lazy" decoding="async"><span class="label lvl" data-t="lv2">From level 2</span><div class="txt"><h3 data-t="m2">Neon Gardens</h3><p data-t="m2p">A ring of light closes on the beat. Stay outside it.</p></div></article>
+        <article class="map rv"><img src="assets/3d/maps/abyss.webp" alt="" loading="lazy" decoding="async"><span class="label lvl" data-t="lv4">From level 4</span><div class="txt"><h3 data-t="m3">Abyss Reactor</h3><p data-t="m3p">A hot core flares on one side, then the other.</p></div></article>
+        <article class="map rv" style="--d:.08s"><img src="assets/3d/maps/orbit.webp" alt="" loading="lazy" decoding="async"><span class="label lvl" data-t="lv7">From level 7</span><div class="txt"><h3 data-t="m4">Orbit of Silence</h3><p data-t="m4p">Gravity pulls you to the centre. Fly against it.</p></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="finale" id="play">
+    <div class="wrap">
+      <span class="label idx rv" data-t="finalLabel">Ready</span>
+      <h2 class="rv" style="--d:.08s"><span class="mask"><span data-t="finalTitle">The forge is lit.</span></span></h2>
+      <div class="row rv" style="--d:.2s"><p data-t="finalText">Play free today. $FORGE goes live with the game.</p><a class="btn" href="game.html"><span data-t="launch">Launch a run</span><span class="arr">→</span></a></div>
+      <div class="keys rv">
+        <div class="key"><kbd>W A S D</kbd><span data-t="k1">Fly</span></div>
+        <div class="key"><kbd>SPACE</kbd><span data-t="k2">Fire at the nearest target</span></div>
+        <div class="key"><kbd>SHIFT</kbd><span data-t="k3">Dash through small enemies</span></div>
+        <div class="key"><kbd>B</kbd><span data-t="k4">Forge blast</span></div>
+        <div class="key"><kbd>ESC</kbd><span data-t="k5">Pause</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#hero"><img src="logo.svg" alt="" style="width:28px;height:28px"><span style="font-size:17px">$FORGE</span></a>
+    <span data-t="foot">© 2026 Starforge. Coins, hulls and modules are in-game items with no cash value.</span>
+  </div>
+</footer>
+
+<script src="vendor/three.min.js" defer></script>
+<script src="forge-models.js" defer></script>
+<script src="ecosystem-config.js" defer></script>
+<script src="online-config.js" defer></script>
+<script src="token-config.js" defer></script>
+<script src="landing-ecosystem.js" defer></script>
+<script src="token-launch.js" defer></script>
+<script src="leaderboard.js" defer></script>
+<script src="landing.js" defer></script>
+</body>
+</html>
