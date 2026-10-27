@@ -7,6 +7,7 @@ The source is published for review; contributions are by invitation. If you were
    ```bash
    cd apps/arcade
    node scripts/test-forge-server.mjs
+   node scripts/test-server-http.mjs
    for f in public/*.js; do node --check "$f"; done
    ```
 3. Keep the CSP intact: no inline `<script>` blocks and no inline event handlers.

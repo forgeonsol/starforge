@@ -14,9 +14,34 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
-      - name: Server tests (built-in SQLite, no install)
+      - name: Board logic (built-in SQLite, no install)
         run: node scripts/test-forge-server.mjs
+      - name: End-to-end security checks against the real server
+        run: node --experimental-strip-types scripts/test-server-http.mjs
       - name: Syntax check for browser scripts
         run: for f in public/*.js; do node --check "$f"; done
       - name: No inline scripts (CSP)
         run: "! grep -nE '<script>[^<]' public/*.html"
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the compose stack
+        working-directory: infra
+        run: cp .env.example .env && docker compose config --quiet
+      - name: Build the production image
+        run: docker build -t starforge-app apps/arcade
+      - name: Start it hardened and wait for health
+        run: |
+          docker run -d --name app --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+            -e ALLOWED_HOSTS=localhost -e COOKIE_SECURE=1 -v forge-data:/data -p 3000:3000 starforge-app
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' app)" = healthy ] && break; sleep 2
+          done
+          docker inspect -f '{{.State.Health.Status}}' app | grep -q healthy
+          curl -fsS -H 'Host: localhost' http://127.0.0.1:3000/index.html -o /dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:3000/index.html)" = 421
+      - name: Logs on failure
+        if: failure()
+        run: docker logs app

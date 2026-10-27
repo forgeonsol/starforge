@@ -12,7 +12,8 @@
 <p align="center">
   <img alt="status" src="https://img.shields.io/badge/status-pre--launch-9945FF" />
   <img alt="token" src="https://img.shields.io/badge/token-not%20launched-14F195" />
-  <img alt="runtime" src="https://img.shields.io/badge/runtime-Cloudflare%20Workers%20%2B%20D1-1f1f24" />
+  <img alt="runtime" src="https://img.shields.io/badge/runtime-Node%2022%20%2B%20SQLite-1f1f24" />
+  <img alt="deploy" src="https://img.shields.io/badge/deploy-Docker%20%2B%20Caddy-1f1f24" />
   <img alt="license" src="https://img.shields.io/badge/license-all%20rights%20reserved-1f1f24" />
 </p>
 
@@ -27,10 +28,11 @@ Starforge is a fast, one-screen arcade shooter that runs in the browser with no 
 ## How it works
 
 1. **Play.** Pick a ship (Spark, Anvil or Flux) and survive. Shards build your weapon; bosses arrive on a timer.
-2. **Submit.** When a signed-in player finishes a run, the game posts it to `POST /api/score`.
-3. **Check.** The server rate-limits submissions and rejects runs that are impossible for their length (score, level, bosses and kills against duration). Rejected runs are written to a security log.
-4. **Rank.** `GET /api/leaderboard` ranks every pilot by their best verified run and shows how each position moved since yesterday.
-5. **Watch.** The board updates every 20 seconds without a reload. Rows glide to new positions; risers flash green, fallers red.
+2. **Join.** No registration: the first finished run creates the pilot under the chosen callsign and signs the browser in with an HttpOnly session cookie.
+3. **Submit.** Each finished run is posted to `POST /api/score`.
+4. **Check.** The server rate-limits submissions and rejects runs that are impossible for their length (score, level, bosses and kills against duration). Rejected runs are written to a security log.
+5. **Rank.** `GET /api/leaderboard` ranks every pilot by their best verified run and shows how each position moved since yesterday.
+6. **Watch.** The board updates every 20 seconds without a reload. Rows glide to new positions; risers flash green, fallers red.
 
 ## Screenshots
 
@@ -49,7 +51,8 @@ Starforge is **pre-launch**. Be clear about what is live and what is not:
 | Part | State |
 |---|---|
 | Landing page, arena, pilot campaign, hangar | Live in the build |
-| Game accounts (ChatGPT sign-in), score API, leaderboard API | Implemented, tested |
+| Pilot accounts without registration, score, shop, raid and leaderboard APIs | Implemented, tested end-to-end |
+| Self-hosted deployment (Docker + Caddy, automatic HTTPS, backups) | Ready; see [DEPLOY.md](DEPLOY.md) |
 | Leaderboard demo profiles | Generated in the browser, always tagged **DEMO**, never stored |
 | $FORGE token, buy and chart links | **Not launched.** The contract address will be announced at launch |
 | Server-side replay verification of runs | Not yet; see [Limitations](#limitations) |
@@ -62,11 +65,12 @@ flowchart LR
     L[Landing<br/>index.html] --> LB[leaderboard.js]
     G[Arena<br/>game.html / game.js] --> LB
   end
-  G -- "POST /api/score" --> W
-  LB -- "GET /api/leaderboard (20 s)" --> W
-  subgraph Cloudflare
-    W[Worker<br/>Next.js on vinext] --> C[lib/forge-server.ts]
-    C --> D[(D1 / SQLite)]
+  G -- "HTTPS · /api/session, /api/score, /api/profile" --> C
+  LB -- "HTTPS · GET /api/leaderboard every 20 s" --> C
+  subgraph VPS [Your server · Docker]
+    C[Caddy<br/>TLS, compression] -- internal network --> S[server.mjs<br/>static files + API]
+    S --> X[lib/arena.ts · lib/session.ts · lib/forge-server.ts]
+    X --> D[(SQLite<br/>daily backups)]
   end
 ```
 
@@ -79,7 +83,7 @@ sequenceDiagram
   participant B as Leaderboard
   P->>A: finishes a run
   A->>S: score, duration, level, bosses, kills
-  S->>S: session · rate limit · plausibility
+  S->>S: session cookie · origin · rate limit · plausibility
   alt implausible
     S->>DB: security_events
     S-->>A: 400
@@ -95,15 +99,17 @@ sequenceDiagram
 
 ```
 apps/
-  arcade/                 deployable app (Next.js on vinext → Cloudflare Workers + D1)
-    app/api/              score, leaderboard, profile, raid routes
-    lib/forge-server.ts   framework-free server core (ranking, rate limits, checks, headers)
+  arcade/                 the app (site, arena, API) and its Dockerfile
+    server/               self-hosted server (Node 22 + SQLite, no npm deps)
+    lib/                  shared logic: board, arena services, sessions, security checks
+    app/api/              Next.js wrappers for the original host
     db/ · drizzle/        schema and SQL migrations
     public/               landing, arena, leaderboard, assets (served as static files)
     scripts/              dev server and tests
 packages/
   brand/                  logo, favicon, color tokens
-docs/                     architecture, security, deployment (docs/ru — Russian notes)
+infra/                    compose stack, Caddyfile, server setup, deploy and backup scripts
+docs/                     security model (docs/ru — Russian guides)
 .github/                  CI and README media
 ```
 
@@ -111,45 +117,50 @@ docs/                     architecture, security, deployment (docs/ru — Russia
 
 Requirements: **Node.js 22.13+**.
 
-Quick look, no install needed (serves the site with a real leaderboard API on in-memory SQLite and a few sample players):
+No install needed — the server uses only Node's built-ins:
 
 ```bash
 cd apps/arcade
-node scripts/dev-forge-server.mjs public 8790
-# open http://127.0.0.1:8790/index.html
+COOKIE_SECURE=0 DEV_SEED=1 node --experimental-strip-types server/server.mjs
+# open http://127.0.0.1:3000  (a few sample players on the board)
 ```
 
-Full app:
+Tests:
 
 ```bash
 cd apps/arcade
-corepack pnpm install
-corepack pnpm dev        # vinext dev server
-corepack pnpm build      # production build
+node scripts/test-forge-server.mjs     # board logic on SQLite
+node scripts/test-server-http.mjs      # 39 end-to-end security checks against the real server
 ```
 
-Tests (no install needed, uses Node's built-in SQLite):
+Production on your own server (Docker + automatic HTTPS):
 
 ```bash
-cd apps/arcade
-node scripts/test-forge-server.mjs
+sudo bash infra/setup-ubuntu.sh --deploy-user forge   # firewall, fail2ban, updates, Docker
+cd infra && cp .env.example .env && nano .env          # DOMAIN, ACME_EMAIL
+docker compose up -d --build
 ```
 
-Deployment, migrations and the online/offline switch are in [DEPLOY.md](DEPLOY.md).
+Full guide: [DEPLOY.md](DEPLOY.md) · по-русски: [docs/ru/VPS-RU.md](docs/ru/VPS-RU.md).
 
 ## Security
 
-- Opaque row keys: account ids never leave the server.
-- Per-IP rate limits on the board (120/min) and on score submission (60/h).
+- Sessions: random 256-bit token in a `__Host-` HttpOnly, Secure, SameSite cookie; only its hash is stored.
+- No identity from headers: forged hosting sign-in headers are stripped.
+- Every write is same-origin (CSRF), JSON-only and size-capped.
+- Rate limits per IP and per player on sign-up, runs, actions and the board.
 - Plausibility checks on every run; rejected runs are logged to `security_events`.
-- Strict CSP with no inline scripts, HSTS, `nosniff`, frame and referrer policies.
+- Unique callsigns with reserved staff-like names; server-side prices; one-time referral pay-outs.
+- Strict CSP with no inline scripts, HSTS, frame, referrer and permissions policies; unknown Host headers refused.
+- Hardened container: non-root, read-only, no capabilities, no internet; host firewall and fail2ban.
 
 Details in [docs/security.md](docs/security.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
 - Scores are computed in the browser. The server rejects impossible runs, but a plausible forged run can still be submitted. Full protection requires replaying the run on the server from its seed and input log.
-- Rate limits use a fixed window in D1. Bot and DDoS protection belongs at the edge (Cloudflare WAF or Turnstile).
+- Volumetric DDoS protection belongs at the network edge (Cloudflare proxy or the host's protection).
+- Pilots are tied to the browser that created them; there is no account recovery yet.
 
 ## License
 

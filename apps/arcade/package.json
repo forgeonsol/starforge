@@ -11,7 +11,9 @@
     "build": "node scripts/run-framework.mjs build",
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "serve": "COOKIE_SECURE=0 DEV_SEED=1 node --experimental-strip-types server/server.mjs",
+    "test": "node scripts/test-forge-server.mjs && node scripts/test-server-http.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
