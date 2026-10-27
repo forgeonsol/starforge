@@ -24,13 +24,13 @@ export interface D1Like {
 const MAX_RUN_SECONDS = 60 * 60;
 
 // ------------------------------------------------------------------ small helpers
-const now = () => Math.floor(Date.now() / 1000);
+export const now = () => Math.floor(Date.now() / 1000);
 const enc = new TextEncoder();
 
 function hex(buf: ArrayBuffer | Uint8Array): string {
   return Array.from(buf instanceof Uint8Array ? buf : new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-async function sha256Hex(text: string): Promise<string> { return hex(await crypto.subtle.digest("SHA-256", enc.encode(text))); }
+export async function sha256Hex(text: string): Promise<string> { return hex(await crypto.subtle.digest("SHA-256", enc.encode(text))); }
 
 const SECURITY_HEADERS: Record<string, string> = {
   "Cache-Control": "no-store",
@@ -45,7 +45,7 @@ export function json(data: unknown, status = 200, extra: Record<string, string> 
   const headers = new Headers({ "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS, ...extra });
   return new Response(JSON.stringify(data), { status, headers });
 }
-function fail(status: number, error: string, extra: Record<string, string> = {}): Response { return json({ error }, status, extra); }
+export function fail(status: number, error: string, extra: Record<string, string> = {}): Response { return json({ error }, status, extra); }
 
 export function clientIp(request: Request): string {
   return request.headers.get("cf-connecting-ip") || (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "local";

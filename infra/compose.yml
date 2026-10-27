@@ -1,0 +1,60 @@
+# $FORGE production stack: the app (Node + SQLite) behind Caddy with automatic HTTPS.
+#   cd infra && cp .env.example .env && nano .env && docker compose up -d --build
+name: starforge
+
+services:
+  app:
+    build: ../apps/arcade
+    image: starforge-app:latest
+    restart: unless-stopped
+    environment:
+      ALLOWED_HOSTS: ${DOMAIN:?set DOMAIN in infra/.env},www.${DOMAIN}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_HOURS: ${BACKUP_HOURS:-24}
+    volumes:
+      - forge-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 200
+    networks: [backend]
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in infra/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    networks: [backend, edge]
+    logging: *logging
+
+networks:
+  backend:
+    internal: true   # the app has no route to the internet and is reachable only through Caddy
+  edge: {}
+
+volumes:
+  forge-data: {}
+  caddy-data: {}
+  caddy-config: {}

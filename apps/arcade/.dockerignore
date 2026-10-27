@@ -1,0 +1,7 @@
+*
+!lib/forge-server.ts
+!lib/arena.ts
+!lib/session.ts
+!server/
+!drizzle/
+!public/

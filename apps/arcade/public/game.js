@@ -287,12 +287,25 @@
     }
   }
 
+  // No registration: the first finished run (or a saved callsign) creates the pilot on the server and signs
+  // this browser in with an HttpOnly session cookie. Guests keep playing locally if that is not possible.
+  async function ensureSession() {
+    if (!ONLINE) return false;
+    if (serverProfile && !serverProfile.guest) return true;
+    const response = await fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ callsign: profile.callsign }) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || tr("Could not create your pilot right now.", "暂时无法创建飞行员。"));
+    await loadProfile();
+    return !!(serverProfile && !serverProfile.guest);
+  }
+
   async function loadProfile() {
     try {
       if (!ONLINE) throw new Error("offline");
       const ref = new URLSearchParams(location.search).get("ref");
       let response = await fetch(`/api/profile${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`, { headers: { Accept: "application/json" } });
       let body = await response.json(); if (!response.ok) throw new Error(body.error || "Profile unavailable");
+      if (body.guest || !body.player) throw new Error("guest");
       if (Number(body.player.welcomeClaimed) === 0) {
         const crate = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "welcome" }) });
       const grant = await crate.json(); if (!crate.ok) throw new Error(grant.error || tr("Welcome credits are unavailable.", "欢迎积分暂不可用。"));
@@ -455,6 +468,7 @@
 
   async function raidAction(action, payload = {}) {
     if (!ONLINE) throw new Error(tr("Squad raids arrive with online play.", "小队突袭将随在线模式开放。"));
+    if (serverProfile?.guest) await ensureSession();
     const response = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...payload }) });
     const body = await response.json(); if (!response.ok) throw new Error(body.error || "Raid request failed"); return body;
   }
@@ -475,6 +489,7 @@
   async function postRun() {
     const run = { callsign: profile.callsign, score, duration: Math.floor(elapsed), level, bossesDefeated, kills };
     recordLocalRun(run);
+    if (serverProfile?.guest && ONLINE) { try { await ensureSession(); } catch (error) { showToast(error.message); } }
     if (serverProfile?.guest) {
       const oldCount = serverProfile.earnedSkins.length;
       serverProfile.playSeconds += run.duration;
@@ -1403,7 +1418,8 @@
   $("saveCallsign").addEventListener("click", async () => {
     const callsign = cleanCallsign($("profileCallsign").value);
     if (!ONLINE) { profile.callsign = callsign; if (serverProfile?.guest) { serverProfile.callsign = callsign; saveGuestProfile(); } persist(); syncProfile(); drawLocalBoard(); showToast(tr("Callsign saved", "代号已保存")); return; }
-    try { const response = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "callsign", callsign }) }); const body = await response.json(); if (!response.ok) throw new Error(body.error); profile.callsign = callsign; persist(); syncProfile(); showToast("Callsign synced"); }
+    try { if (serverProfile?.guest) { profile.callsign = callsign; await ensureSession(); persist(); syncProfile(); showToast(tr("Callsign saved", "代号已保存")); return; }
+      const response = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "callsign", callsign }) }); const body = await response.json(); if (!response.ok) throw new Error(body.error); profile.callsign = callsign; persist(); syncProfile(); showToast("Callsign synced"); }
     catch(error) { showToast(error.message || "Could not save callsign"); }
   });
   $("copyRef").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("refLink").textContent); showToast("Referral link copied"); } catch { showToast("Select and copy your link"); } });

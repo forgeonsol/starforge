@@ -80,3 +80,11 @@ export const securityEvents = sqliteTable("security_events", {
   detail: text("detail").notNull(),
   createdAt: integer("created_at").notNull(),
 }, (t) => ({ byTime: index("security_events_time").on(t.createdAt) }));
+
+export const playerSessions = sqliteTable("player_sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  playerId: text("player_id").notNull().references(() => players.id),
+  createdAt: integer("created_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  lastSeenAt: integer("last_seen_at").notNull(),
+}, (t) => ({ byPlayer: index("player_sessions_player").on(t.playerId), byExpiry: index("player_sessions_expiry").on(t.expiresAt) }));
