@@ -63,6 +63,4 @@
 .lb-compact .lb-view:has(.lb-empty:not([hidden])) { min-height: 240px; }
 
 /* AI pilots: hold open spots until real pilots arrive */
-.lb-ai-note { padding: 4px 7px; border-radius: 999px; border: 1px solid var(--lb-line); color: var(--text-3, #6d6d73); font-size: 9.5px; cursor: help; }
-.lb-tag.ai { border-color: rgba(185,140,255,.28); color: #9a86c4; }
-.lb-row.is-ai .lb-name b { color: var(--text-2, #a3a3a8); }
+.lb-ai-note { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--lb-line2); color: var(--text-2, #a3a3a8); font-size: 9.5px; cursor: help; }
