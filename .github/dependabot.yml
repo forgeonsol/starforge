@@ -1,0 +1,12 @@
+# Weekly pull requests when the base images or the CI actions get security updates.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /apps/arcade
+    schedule: { interval: weekly }
+  - package-ecosystem: docker-compose
+    directory: /infra
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

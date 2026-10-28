@@ -34,7 +34,7 @@ sudo bash infra/setup-ubuntu.sh --deploy-user forge --harden-ssh
 ```bash
 cd infra
 cp .env.example .env
-nano .env            # DOMAIN=your-domain.com  ACME_EMAIL=you@example.com
+nano .env            # DOMAIN=your-domain.com  ACME_EMAIL=you@example.com  SECURITY_CONTACT=mailto:you@example.com
 ```
 
 ## 3. Start
@@ -75,7 +75,8 @@ The script:
 |---|---|
 | status | `docker compose ps` |
 | app logs | `docker compose logs -f app` |
-| suspicious activity | `docker compose exec app node -e "const {DatabaseSync}=require('node:sqlite');console.table(new DatabaseSync('/data/forge.db',{readOnly:true}).prepare('SELECT kind,subject,detail,datetime(created_at,\'unixepoch\') t FROM security_events ORDER BY id DESC LIMIT 30').all())"` |
+| security report (refusals, blocked IPs) | `bash infra/security-report.sh 24` |
+| raw security log | `docker compose exec app node -e "const {DatabaseSync}=require('node:sqlite');console.table(new DatabaseSync('/data/forge.db',{readOnly:true}).prepare('SELECT kind,subject,detail,datetime(created_at,\'unixepoch\') t FROM security_events ORDER BY id DESC LIMIT 30').all())"` |
 | restart | `docker compose restart app` |
 | stop everything | `docker compose down` (data stays in the volumes) |
 

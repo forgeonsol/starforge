@@ -11,11 +11,14 @@ services:
       ALLOWED_HOSTS: ${DOMAIN:?set DOMAIN in infra/.env},www.${DOMAIN}
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
       BACKUP_HOURS: ${BACKUP_HOURS:-24}
+      SECURITY_CONTACT: ${SECURITY_CONTACT:-}
+      BAN_STRIKES: ${BAN_STRIKES:-40}
+      BAN_MINUTES: ${BAN_MINUTES:-30}
     volumes:
       - forge-data:/data
     read_only: true
     tmpfs:
-      - /tmp:size=16m
+      - /tmp:size=16m,noexec,nosuid,nodev
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     mem_limit: 512m
@@ -42,6 +45,10 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    pids_limit: 200
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]
     security_opt: ["no-new-privileges:true"]

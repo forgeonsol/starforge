@@ -51,6 +51,27 @@ EOF
 systemctl enable --now fail2ban
 systemctl restart fail2ban
 
+echo "==> kernel network hardening"
+cat > /etc/sysctl.d/90-forge-hardening.conf <<'SYSCTL'
+net.ipv4.tcp_syncookies = 1
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.conf.all.log_martians = 1
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+SYSCTL
+sysctl --system >/dev/null || true
+
 echo "==> Docker (official repository)"
 if ! command -v docker >/dev/null; then
   install -m 0755 -d /etc/apt/keyrings
@@ -63,7 +84,7 @@ fi
 # container logs are capped; Docker never writes around ufw for ports we do not publish
 mkdir -p /etc/docker
 [ -f /etc/docker/daemon.json ] || cat > /etc/docker/daemon.json <<'EOF'
-{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "5" }, "live-restore": true }
+{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "5" }, "live-restore": true, "no-new-privileges": true, "icc": false }
 EOF
 systemctl enable --now docker
 systemctl restart docker

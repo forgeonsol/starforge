@@ -54,6 +54,7 @@
   let profile;
   // Optional run modes driven by the token layer (raids, boss rush, hardcore). null = the classic arena run.
   let runMode = null, pendingMode = null;
+  let runTicket = null; // promise of the server's one-time ticket for the current classic run
   try { profile = { ...baseSave, ...JSON.parse((() => { try { return localStorage.getItem(SAVE_KEY); } catch { return null; } })() || "{}") }; }
   catch { profile = { ...baseSave }; }
 
@@ -187,6 +188,23 @@
     $("langToggle").textContent = language === "en" ? "EN · 中文" : "中文 · EN";
     $("langToggle").setAttribute("aria-label", language === "en" ? "Switch to Chinese" : "切换至英文");
     if (serverProfile) { renderMaps(); renderAchievements(); renderHangar(); renderShop(); syncProfile(); }
+    renderRecovery();
+  }
+  // Pilot recovery: a one-time code restores the pilot in another browser (sessions live in an HttpOnly cookie).
+  function renderRecovery() {
+    const card = $("recoveryCard"); if (!card) return;
+    card.hidden = !ONLINE;
+    $("recTag").textContent = tr("PILOT RECOVERY", "飞行员恢复");
+    $("recTitle").textContent = tr("Keep your pilot", "保管好你的飞行员");
+    $("recText").textContent = tr("Your pilot lives in this browser. Get a one-time code and keep it somewhere safe: it brings your pilot back on another device or after clearing the browser.", "你的飞行员保存在此浏览器中。获取一次性恢复码并妥善保存：更换设备或清除浏览器后可用它找回飞行员。");
+    $("recNew").textContent = tr("GET RECOVERY CODE", "获取恢复码");
+    $("recUse").textContent = tr("RESTORE PILOT", "恢复飞行员");
+  }
+  async function postJson(url, payload) {
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(payload) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || tr("Request failed.", "请求失败。"));
+    return body;
   }
   const player = { x: WIDTH / 2, y: HEIGHT / 2, vx: 1, vy: 0, radius: 12 };
   let randomSeed = dayNo % 2147483647 || 1;
@@ -489,7 +507,7 @@
   async function postRun() {
     const run = { callsign: profile.callsign, score, duration: Math.floor(elapsed), level, bossesDefeated, kills };
     recordLocalRun(run);
-    if (serverProfile?.guest && ONLINE) { try { await ensureSession(); } catch (error) { showToast(error.message); } }
+    if (serverProfile?.guest && ONLINE && !runMode) { try { await ensureSession(); } catch (error) { showToast(error.message); } }
     if (serverProfile?.guest) {
       const oldCount = serverProfile.earnedSkins.length;
       serverProfile.playSeconds += run.duration;
@@ -512,8 +530,10 @@
       $("modalCopy").textContent += tr(` +${Math.min(500, Math.floor(score / 350))} coins. Progress saved on this device.`, ` +${Math.min(500, Math.floor(score / 350))} 金币。进度已保存在此设备。`);
       return;
     }
+    if (runMode) { $("modalCopy").textContent += tr(" Special-mode runs stay on this device.", " 特殊模式成绩仅保存在本设备。"); return; }
     try {
-      const response = await fetch("/api/score", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(run) });
+      const ticket = await runTicket; runTicket = null;
+      const response = await fetch("/api/score", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ ...run, ticket }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Score could not be posted");
       await loadBoard();
@@ -1152,6 +1172,10 @@
       if (runMode.mode === "raid") { level = runMode.bossLevel; nextLevelAt = STEP_SECONDS; spawnBoss(runMode.bossLevel); }
       banner = { kicker: runMode.kicker || "SPECIAL MODE", title: runMode.title || "", color: "#ff4a2e", life: 2.4, max: 2.4 };
     }
+    // the server only accepts a run whose ticket was issued at least as long ago as the run lasted
+    runTicket = !runMode && ONLINE
+      ? fetch("/api/run/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).then((r) => (r.ok ? r.json() : null)).then((b) => b?.ticket || null).catch(() => null)
+      : null;
     window.dispatchEvent(new CustomEvent("forge-run-start", { detail: { mode: runMode } }));
     updateHud(); announce(`${selectedRig.name} LAUNCHED`);
   }
@@ -1421,6 +1445,22 @@
     try { if (serverProfile?.guest) { profile.callsign = callsign; await ensureSession(); persist(); syncProfile(); showToast(tr("Callsign saved", "代号已保存")); return; }
       const response = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "callsign", callsign }) }); const body = await response.json(); if (!response.ok) throw new Error(body.error); profile.callsign = callsign; persist(); syncProfile(); showToast("Callsign synced"); }
     catch(error) { showToast(error.message || "Could not save callsign"); }
+  });
+  $("recNew")?.addEventListener("click", async () => {
+    if (!serverProfile || serverProfile.guest) { $("recStatus").textContent = tr("Finish a run first: it creates your pilot.", "先完成一局：系统会为你创建飞行员。"); return; }
+    try {
+      const { code } = await postJson("/api/session/recovery-code", {});
+      $("recCode").hidden = false; $("recCode").textContent = code;
+      $("recStatus").textContent = tr("Shown only once. Save it now. A new code replaces the old one.", "仅显示一次，请立即保存。新恢复码会使旧码失效。");
+    } catch (error) { $("recStatus").textContent = error.message; }
+  });
+  $("recUse")?.addEventListener("click", async () => {
+    try {
+      const { callsign } = await postJson("/api/session/recover", { code: $("recInput").value });
+      $("recInput").value = ""; $("recCode").hidden = true;
+      $("recStatus").textContent = tr(`Welcome back, ${callsign}. This code is now used up; get a new one.`, `欢迎回来，${callsign}。此恢复码已失效，请重新获取。`);
+      await loadProfile(); loadBoard();
+    } catch (error) { $("recStatus").textContent = error.message; }
   });
   $("copyRef").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("refLink").textContent); showToast("Referral link copied"); } catch { showToast("Select and copy your link"); } });
   $("createRoom").addEventListener("click", async () => {

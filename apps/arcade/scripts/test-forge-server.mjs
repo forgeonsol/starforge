@@ -59,7 +59,7 @@ const big = await body(await S.handleLeaderboard(req("/api/leaderboard?limit=999
 ok(big.rows.length <= 500, "limit is capped server-side");
 const hdr = (await S.handleLeaderboard(req("/api/leaderboard"), db)).headers;
 ok(hdr.get("x-content-type-options") === "nosniff" && /max-age/.test(hdr.get("strict-transport-security") || "") && hdr.get("cache-control") === "no-store", "responses carry security headers");
-let limited = false; for (let i = 0; i < 130; i++) { const r = await S.handleLeaderboard(req("/api/leaderboard", "10.9.9.9"), db); if (r.status === 429) { limited = true; break; } }
+let limited = false; for (let i = 0; i < 320; i++) { const r = await S.handleLeaderboard(req("/api/leaderboard", "10.9.9.9"), db); if (r.status === 429) { limited = true; break; } }
 ok(limited, "the board endpoint is rate limited per IP");
 
 console.log("\nrun checks");

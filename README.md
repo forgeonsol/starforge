@@ -55,6 +55,7 @@ Starforge is **pre-launch**. Be clear about what is live and what is not:
 | Self-hosted deployment (Docker + Caddy, automatic HTTPS, backups) | Ready; see [DEPLOY.md](DEPLOY.md) |
 | Leaderboard demo profiles | Generated in the browser, always tagged **DEMO**, never stored |
 | $FORGE token, buy and chart links | **Not launched.** The contract address will be announced at launch |
+| Run tickets (a run can't be submitted faster than real time, each counts once) | Implemented |
 | Server-side replay verification of runs | Not yet; see [Limitations](#limitations) |
 
 ## Architecture
@@ -130,7 +131,7 @@ Tests:
 ```bash
 cd apps/arcade
 node scripts/test-forge-server.mjs     # board logic on SQLite
-node scripts/test-server-http.mjs      # 39 end-to-end security checks against the real server
+node scripts/test-server-http.mjs      # 59 end-to-end security checks against the real server
 ```
 
 Production on your own server (Docker + automatic HTTPS):
@@ -148,7 +149,9 @@ Full guide: [DEPLOY.md](DEPLOY.md) · по-русски: [docs/ru/VPS-RU.md](doc
 - Sessions: random 256-bit token in a `__Host-` HttpOnly, Secure, SameSite cookie; only its hash is stored.
 - No identity from headers: forged hosting sign-in headers are stripped.
 - Every write is same-origin (CSRF), JSON-only and size-capped.
-- Rate limits per IP and per player on sign-up, runs, actions and the board.
+- Rate limits per IP and per player on sign-up, runs, actions and the board; IPs that keep getting refused are blocked automatically.
+- One-time run tickets: a score is accepted only if its run started on the server at least as long ago as it lasted.
+- One-time recovery codes (~99 bits, stored hashed) and at most 5 active sessions per pilot.
 - Plausibility checks on every run; rejected runs are logged to `security_events`.
 - Unique callsigns with reserved staff-like names; server-side prices; one-time referral pay-outs.
 - Strict CSP with no inline scripts, HSTS, frame, referrer and permissions policies; unknown Host headers refused.
@@ -158,9 +161,9 @@ Details in [docs/security.md](docs/security.md). To report a vulnerability, see 
 
 ## Limitations
 
-- Scores are computed in the browser. The server rejects impossible runs, but a plausible forged run can still be submitted. Full protection requires replaying the run on the server from its seed and input log.
+- Scores are computed in the browser. The server rejects impossible runs and runs faster than real time, but someone who really plays for a while can still inflate that run's score within the plausible range. Full protection requires replaying the run on the server from its seed and input log.
 - Volumetric DDoS protection belongs at the network edge (Cloudflare proxy or the host's protection).
-- Pilots are tied to the browser that created them; there is no account recovery yet.
+- A pilot who clears the browser without saving a recovery code loses access to it.
 
 ## License
 

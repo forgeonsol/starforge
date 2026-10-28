@@ -93,11 +93,26 @@ function weekStart(): string { const d = new Date(); const day = (d.getUTCDay() 
 /** GET /api/leaderboard?scope=all|week&limit=1..500&q=   (meId: the signed-in player id, if any) */
 export async function handleLeaderboard(request: Request, db: D1Like, meId: string | null = null): Promise<Response> {
   const url = new URL(request.url);
-  if (!(await rateLimit(db, `board:${clientIp(request)}`, 120, 60))) return fail(429, "Slow down a little.");
+  if (!(await rateLimit(db, `board:${clientIp(request)}`, 300, 60))) return fail(429, "Slow down a little.");
   const scope = url.searchParams.get("scope") === "week" ? "week" : "all";
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit")) || 200));
   const q = (url.searchParams.get("q") || "").trim().toLowerCase().slice(0, 24);
   const today = utcDay(), from = scope === "week" ? weekStart() : "0000-00-00";
+  const ranked = await rankedBoard(db, scope, today, from);
+  let out: BoardRow[] = ranked.map((r) => ({ rank: r.rank, key: r.key, name: r.name, score: r.score, change: r.change, runs: r.runs, isYou: !!meId && meId === r.id }));
+  if (q) out = out.filter((r) => r.name.toLowerCase().includes(q));
+  return json({ scope, generatedAt: new Date(ranked.builtAt).toISOString(), total: ranked.length, rows: out.slice(0, limit), signedIn: !!meId });
+}
+
+// The ranking is the same for every viewer, so it is computed at most once per BOARD_TTL_MS per scope;
+// a burst of board requests then costs one query instead of one each.
+const BOARD_TTL_MS = 5000;
+type Ranked = Array<Omit<BoardRow, "isYou"> & { id: string }> & { builtAt: number };
+const boardCache = new Map<string, Ranked>();
+async function rankedBoard(db: D1Like, scope: string, today: string, from: string): Promise<Ranked> {
+  const cacheKey = `${scope}:${today}`;
+  const hit = boardCache.get(cacheKey);
+  if (hit && Date.now() - hit.builtAt < BOARD_TTL_MS) return hit;
   const rows = (await db.prepare(
     `SELECT p.id AS id, p.callsign AS name, MAX(s.score) AS best,
             MAX(CASE WHEN s.day_key < ? THEN s.score END) AS prevBest, COUNT(*) AS runs, p.created_at AS createdAt
@@ -108,12 +123,17 @@ export async function handleLeaderboard(request: Request, db: D1Like, meId: stri
   // rank change = position by yesterday's best vs position now (null = new on the board today)
   const prev = rows.filter((r) => r.prevBest != null).sort((a, b) => Number(b.prevBest) - Number(a.prevBest) || String(a.createdAt).localeCompare(String(b.createdAt)));
   const prevRank = new Map(prev.map((r, i) => [r.id, i + 1]));
-  let out: BoardRow[] = [];
-  for (let i = 0; i < rows.length && out.length < 1000; i++) {
+  const out = [] as unknown as Ranked;
+  for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
-    out.push({ rank: i + 1, key: (await sha256Hex("forge-board:" + r.id)).slice(0, 16), name: String(r.name || "PILOT"), score: Number(r.best),
-      change: prevRank.has(r.id) ? (prevRank.get(r.id) as number) - (i + 1) : null, runs: Number(r.runs), isYou: !!meId && meId === r.id });
+    out.push({ id: r.id, rank: i + 1, key: (await sha256Hex("forge-board:" + r.id)).slice(0, 16), name: String(r.name || "PILOT"), score: Number(r.best),
+      change: prevRank.has(r.id) ? (prevRank.get(r.id) as number) - (i + 1) : null, runs: Number(r.runs) });
   }
-  if (q) out = out.filter((r) => r.name.toLowerCase().includes(q));
-  return json({ scope, generatedAt: new Date().toISOString(), total: rows.length, rows: out.slice(0, limit), signedIn: !!meId });
+  out.builtAt = Date.now();
+  boardCache.set(cacheKey, out);
+  if (boardCache.size > 8) boardCache.delete(boardCache.keys().next().value as string);
+  return out;
 }
+
+/** Drops the cached ranking (a new run was accepted). */
+export function invalidateBoard(): void { boardCache.clear(); }

@@ -50,6 +50,13 @@
       "when": 1793100000000,
       "tag": "0006_player_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793200000000,
+      "tag": "0007_security_hardening",
+      "breakpoints": true
     }
   ]
 }

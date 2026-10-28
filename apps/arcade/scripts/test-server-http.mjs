@@ -14,7 +14,7 @@ const DATA = mkdtempSync(join(tmpdir(), "forge-test-"));
 const PORT = 3900 + Math.floor(Math.random() * 90);
 const B = `http://127.0.0.1:${PORT}`;
 const srv = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "server/server.mjs"], {
-  cwd: APP, env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, COOKIE_SECURE: "0", TRUST_PROXY: "0", ALLOWED_HOSTS: "127.0.0.1,localhost", BACKUP_HOURS: "0" },
+  cwd: APP, env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, COOKIE_SECURE: "0", TRUST_PROXY: "0", ALLOWED_HOSTS: "127.0.0.1,localhost", BACKUP_HOURS: "0", BAN_STRIKES: "60", SECURITY_CONTACT: "mailto:security@forge.example" },
   stdio: ["ignore", "pipe", "inherit"],
 });
 let logs = ""; srv.stdout.on("data", (c) => { logs += c; });
@@ -47,6 +47,8 @@ try {
   ok(traversal, "path traversal, dotfiles, _headers and broken encodings are refused");
   ok((await post("/index.html", {})).status === 405, "static files only answer GET/HEAD");
   ok((await rawHost("evil.example")) === 421 && (await rawHost("127.0.0.1")) === 200, "unknown Host headers are rejected");
+  const sec = await get("/.well-known/security.txt");
+  ok(sec.status === 200 && /Contact: mailto:security@forge\.example/.test(await sec.text()), "security.txt tells researchers where to report");
 
   console.log("\nidentity");
   const isGuest = async (r) => { const b = await r.json(); return r.status === 200 && b.guest === true && b.player === null; };
@@ -82,32 +84,77 @@ try {
   ok((await post("/api/profile", { action: "equip-skin", skinId: "skin-40" }, { cookie })).status === 403, "locked skins cannot be equipped");
 
   console.log("\nruns and board");
+  // a ticket as the game gets it at launch; `age` pretends the run started that many seconds ago
+  const ticket = async (age = 0) => {
+    const t = (await (await post("/api/run/start", {})).json()).ticket;
+    if (age) sqlite.prepare("UPDATE run_tickets SET created_at = created_at - ? WHERE created_at = (SELECT MAX(created_at) FROM run_tickets)").run(age);
+    return t;
+  };
+  const RUN = { score: 15000, duration: 150, level: 4, bossesDefeated: 3, kills: 200 };
   ok((await post("/api/score", { score: 400000, duration: 30, level: 1, bossesDefeated: 0, kills: 1 }, { cookie })).status === 400, "an impossible run is rejected");
   ok(sqlite.prepare("SELECT COUNT(*) AS n FROM security_events WHERE kind = 'implausible_run'").get().n === 1, "the rejected run is in the security log");
-  const sc = await post("/api/score", { callsign: "ADMIN", score: 15000, duration: 150, level: 4, bossesDefeated: 3, kills: 200 }, { cookie });
+  ok((await post("/api/score", RUN, { cookie })).status === 400, "a run without a server ticket is rejected");
+  ok((await post("/api/score", { ...RUN, ticket: await ticket() }, { cookie })).status === 400, "a 150-second run on a ticket issued just now is rejected (faster than real time)");
+  ok((await post("/api/score", { ...RUN, ticket: "f".repeat(32) }, { cookie })).status === 400, "an invented ticket is rejected");
+  const kinds = sqlite.prepare("SELECT detail FROM security_events WHERE kind = 'bad_run_ticket'").all().map((r) => JSON.parse(r.detail).why).join(",");
+  ok(kinds === "missing,faster_than_real_time,unknown", "each ticket failure is logged with its reason");
+  const good = await ticket(160);
+  const sc = await post("/api/score", { ...RUN, callsign: "ADMIN", ticket: good }, { cookie });
   const scBody = await sc.json();
   ok(sc.status === 201 && scBody.callsign === "ACE_1", "a valid run is saved, and a reserved callsign in it is ignored");
-  ok((await post("/api/score", { score: 15100, duration: 150, level: 4, bossesDefeated: 3, kills: 200 }, { cookie })).status === 429, "runs posted faster than they can be played are refused");
+  ok((await post("/api/score", { ...RUN, score: 15100, ticket: good }, { cookie })).status === 400, "a ticket counts once");
+  ok((await post("/api/score", { ...RUN, score: 15100, ticket: await ticket(160) }, { cookie })).status === 429, "runs posted faster than they can be played are refused");
   const board = await (await get("/api/leaderboard", cookie)).json();
   ok(board.rows.length === 1 && board.rows[0].name === "ACE_1" && board.rows[0].isYou, "the run is on the board as this player's row");
   ok(!JSON.stringify(board).includes("p_"), "no account id appears on the board");
   ok((await post("/api/score", { score: 100, duration: 60, level: 1, bossesDefeated: 0, kills: 5 })).status === 401, "runs need a session");
 
+  console.log("\nsecond pilot: raids and referrals");
+  const s2 = await post("/api/session", { callsign: "BRAVO" });
+  const cookie2 = (s2.headers.get("set-cookie") || "").split(";")[0];
+  const room = await (await post("/api/profile", { action: "room-create" }, { cookie })).json();
+  ok((await get("/api/raid?code=" + room.code, cookie)).status === 200, "a raid member can see the raid");
+  ok((await get("/api/raid?code=" + room.code, cookie2)).status === 403, "a pilot outside the raid cannot see it");
+  await get("/api/profile?ref=" + prof.player.referralCode, cookie2);
+  ok(sqlite.prepare("SELECT referred_by AS r FROM players WHERE callsign = 'BRAVO'").get().r === null, "a referral between two pilots from the same network is ignored");
+
+  console.log("\nrecovery codes");
+  ok((await post("/api/session/recovery-code", {})).status === 401, "a recovery code needs a pilot");
+  const code = (await (await post("/api/session/recovery-code", {}, { cookie })).json()).code;
+  ok(/^[A-HJ-NP-Z2-9]{5}(-[A-HJ-NP-Z2-9]{5}){3}$/.test(code), "codes are 20 unambiguous characters (~99 bits)");
+  ok(!JSON.stringify(sqlite.prepare("SELECT recovery_hash FROM players").all()).includes(code.replace(/-/g, "")), "only a hash of the code is stored");
+  const rec = await post("/api/session/recover", { code: code.toLowerCase() });
+  const recCookie = (rec.headers.get("set-cookie") || "").split(";")[0];
+  const recWho = await (await get("/api/session", recCookie)).json();
+  ok(rec.status === 200 && recWho.callsign === "ACE_1", "the code signs another browser in as the same pilot");
+  ok((await post("/api/session/recover", { code })).status === 404, "a code works only once");
+  ok((await post("/api/session/recover", { code: "AAAAA-BBBBB-CCCCC-DDDDD" })).status === 404, "a wrong code is refused");
+  for (let i = 0; i < 4; i++) { const c = (await (await post("/api/session/recovery-code", {}, { cookie: recCookie })).json()).code; await post("/api/session/recover", { code: c }); }
+  ok(sqlite.prepare("SELECT COUNT(*) AS n FROM player_sessions WHERE player_id = (SELECT id FROM players WHERE callsign = 'ACE_1')").get().n === 5, "a pilot keeps at most 5 active sessions");
+  ok(await isGuest(await get("/api/profile", cookie)), "the oldest session is signed out when the limit is passed");
+
   console.log("\nflood limits");
-  let created = 1, limited = false;
+  let created = 2, limited = false;
   for (let i = 0; i < 8; i++) { const r = await post("/api/session", { callsign: "BOT" + i }, { headers: { "X-Forwarded-For": `10.0.0.${i}` } }); if (r.status === 201) created++; if (r.status === 429) { limited = true; break; } }
   ok(limited && created <= 5, "new pilots per network are capped, and a spoofed X-Forwarded-For does not get around it");
 
   console.log("\nsign-out");
-  const out = await post("/api/session", {}, { cookie, method: "DELETE" });
+  const out = await post("/api/session", {}, { cookie: recCookie, method: "DELETE" });
   ok(out.status === 200 && /Max-Age=0/.test(out.headers.get("set-cookie") || ""), "sign-out clears the cookie");
-  ok(await isGuest(await get("/api/profile", cookie)), "and revokes the session on the server");
+  ok(await isGuest(await get("/api/profile", recCookie)), "and revokes the session on the server");
 
   console.log("\nbackups");
   const copy = backup(openDb(join(DATA, "forge.db")), join(DATA, "backups"), 2);
   const restored = new DatabaseSync(copy);
   ok(existsSync(copy) && restored.prepare("SELECT COUNT(*) AS n FROM players").get().n >= 1, "an online backup holds the data");
   ok(!/"level":"error"/.test(logs), "the server logged no errors");
+
+  console.log("\nautomatic ban");
+  let bannedAt = 0;
+  for (let i = 1; i <= 80; i++) { const r = await post("/api/session", "{x", {}); if (r.status === 403) { bannedAt = i; break; } }
+  ok(bannedAt > 0, `an IP that keeps sending rejected requests is blocked (after ${bannedAt} more)`);
+  ok((await get("/api/leaderboard")).status === 403 && (await get("/index.html")).status === 200, "the block covers the API only; the site still loads");
+  ok(sqlite.prepare("SELECT COUNT(*) AS n FROM security_events WHERE kind = 'ip_banned'").get().n === 1, "the block is written to the security log");
 } finally {
   srv.kill("SIGTERM");
   await new Promise((r) => setTimeout(r, 300));
