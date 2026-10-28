@@ -18,6 +18,8 @@ export const players = sqliteTable("players", {
   equippedSkin: text("equipped_skin").notNull().default("skin-01"),
   equippedAmmo: text("equipped_ammo").notNull().default("ammo-pulse"),
   lastSubmissionAt: integer("last_submission_at").notNull().default(0),
+  signupIpHash: text("signup_ip_hash"),
+  recoveryHash: text("recovery_hash").unique(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -88,3 +90,10 @@ export const playerSessions = sqliteTable("player_sessions", {
   expiresAt: integer("expires_at").notNull(),
   lastSeenAt: integer("last_seen_at").notNull(),
 }, (t) => ({ byPlayer: index("player_sessions_player").on(t.playerId), byExpiry: index("player_sessions_expiry").on(t.expiresAt) }));
+
+export const runTickets = sqliteTable("run_tickets", {
+  idHash: text("id_hash").primaryKey(),
+  ip: text("ip").notNull(),
+  createdAt: integer("created_at").notNull(),
+  usedAt: integer("used_at"),
+}, (t) => ({ byCreated: index("run_tickets_created").on(t.createdAt) }));

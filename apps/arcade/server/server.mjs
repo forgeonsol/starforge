@@ -8,14 +8,16 @@
 //   TRUST_PROXY=1      take the client IP from X-Forwarded-For (only behind your own reverse proxy)
 //   ALLOWED_HOSTS=forge.example.com,www.forge.example.com   reject other Host headers (empty = allow any)
 //   BACKUP_HOURS=24  BACKUP_KEEP=14   DEV_SEED=1 (sample players, local only)
+//   SECURITY_CONTACT=mailto:security@forge.example.com   published in /.well-known/security.txt
+//   BAN_STRIKES=40  BAN_MINUTES=30   an IP that collects this many rejected API calls in 10 min is blocked
 import http from "node:http";
 import { createReadStream, existsSync, mkdirSync, statSync } from "node:fs";
 import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { backup, cleanup, d1, migrate, openDb } from "./sqlite-d1.mjs";
 import { handleLeaderboard, json } from "../lib/forge-server.ts";
-import { handleProfileGet, handleProfilePost, handleRaid, handleScore } from "../lib/arena.ts";
-import { handleSessionCreate, handleSessionDelete, sessionPlayer } from "../lib/session.ts";
+import { handleProfileGet, handleProfilePost, handleRaid, handleRunStart, handleScore } from "../lib/arena.ts";
+import { handleRecover, handleRecoveryCode, handleSessionCreate, handleSessionDelete, sessionPlayer } from "../lib/session.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const env = process.env;
@@ -29,6 +31,9 @@ const ALLOWED_HOSTS = new Set((env.ALLOWED_HOSTS || "").split(",").map((h) => h.
 const BACKUP_HOURS = Number(env.BACKUP_HOURS || 24);
 const BACKUP_KEEP = Number(env.BACKUP_KEEP || 14);
 const MAX_BODY = 16 * 1024;
+const SECURITY_CONTACT = env.SECURITY_CONTACT || "";
+const BAN_STRIKES = Number(env.BAN_STRIKES || 40);
+const BAN_MS = Number(env.BAN_MINUTES || 30) * 60_000;
 
 // ------------------------------------------------------------------ database
 mkdirSync(DATA_DIR, { recursive: true });
@@ -69,7 +74,31 @@ function allow(key, limit, windowMs) {
   if (!b || t - b.start >= windowMs) { b = { start: t, n: 0 }; buckets.set(key, b); }
   return ++b.n <= limit;
 }
-setInterval(() => { const t = Date.now(); for (const [k, b] of buckets) if (t - b.start > 120_000) buckets.delete(k); }, 60_000).unref();
+setInterval(() => {
+  const t = Date.now();
+  for (const [k, b] of buckets) if (t - b.start > 120_000) buckets.delete(k);
+  for (const [k, s] of strikes) if (t - s.start > STRIKE_WINDOW_MS) strikes.delete(k);
+  for (const [k, until] of bans) if (until < t) bans.delete(k);
+}, 60_000).unref();
+
+// ------------------------------------------------------------------ automatic ban for clients that keep getting refused
+// Rejections that an honest browser almost never produces (forged runs, cross-site writes, oversized or malformed
+// bodies, hammering past rate limits) count as strikes. Too many in 10 minutes blocks the IP's API access for a while.
+const STRIKE_WINDOW_MS = 10 * 60_000;
+const STRIKE_STATUSES = new Set([400, 403, 404, 405, 413, 415, 429]);
+const strikes = new Map(), bans = new Map();
+function strike(ip, status, path, method = "POST") {
+  if (!STRIKE_STATUSES.has(status) || (status === 404 && !path.startsWith("/api/session/recover"))) return;
+  if (method === "GET" && status !== 400) return; // busy shared networks polling the board are not abusers
+  const t = Date.now(); let s = strikes.get(ip);
+  if (!s || t - s.start > STRIKE_WINDOW_MS) { s = { start: t, n: 0 }; strikes.set(ip, s); }
+  if (++s.n >= BAN_STRIKES && !bans.has(ip)) {
+    bans.set(ip, t + BAN_MS); strikes.delete(ip);
+    log({ level: "warn", msg: "ip banned", ip, minutes: BAN_MS / 60_000 });
+    try { sqlite.prepare("INSERT INTO security_events (kind, subject, detail, created_at) VALUES ('ip_banned', ?, ?, ?)").run(ip.slice(0, 64), `${BAN_STRIKES} rejected calls`, Math.floor(t / 1000)); } catch {}
+  }
+}
+const banned = (ip) => { const until = bans.get(ip); return until && until > Date.now(); };
 
 // ------------------------------------------------------------------ routes
 const ROUTES = {
@@ -78,6 +107,9 @@ const ROUTES = {
   "POST /api/profile": (r, me) => handleProfilePost(r, db, me),
   "GET /api/raid": (r, me) => handleRaid(r, db, me),
   "POST /api/score": (r, me) => handleScore(r, db, me),
+  "POST /api/run/start": (r) => handleRunStart(r, db),
+  "POST /api/session/recovery-code": (r, me) => handleRecoveryCode(r, db, me),
+  "POST /api/session/recover": (r) => handleRecover(r, db, COOKIE),
   "POST /api/session": (r) => handleSessionCreate(r, db, COOKIE),
   "DELETE /api/session": (r) => handleSessionDelete(r, db, COOKIE),
   "GET /api/session": async (_r, me) => {
@@ -104,9 +136,10 @@ async function readBody(req) {
 async function api(req, res, url, ip, started) {
   const handler = ROUTES[`${req.method} ${url.pathname}`];
   if (!handler) return send(res, url.pathname.startsWith("/api/") && Object.keys(ROUTES).some((k) => k.endsWith(" " + url.pathname)) ? 405 : 404, '{"error":"Not found."}', { "Content-Type": "application/json" });
-  if (!allow("api:" + ip, 300, 60_000)) return send(res, 429, '{"error":"Slow down a little."}', { "Content-Type": "application/json", "Retry-After": "60" });
+  if (banned(ip)) return send(res, 403, '{"error":"Access paused for this network. Try again later."}', { "Content-Type": "application/json", "Retry-After": String(BAN_MS / 1000) });
+  if (!allow("api:" + ip, 300, 60_000)) { strike(ip, 429, url.pathname, req.method); return send(res, 429, '{"error":"Slow down a little."}', { "Content-Type": "application/json", "Retry-After": "60" }); }
   const body = req.method === "GET" || req.method === "HEAD" ? undefined : await readBody(req);
-  if (body === null) return send(res, 413, '{"error":"Request too large."}', { "Content-Type": "application/json" });
+  if (body === null) { strike(ip, 413, url.pathname); return send(res, 413, '{"error":"Request too large."}', { "Content-Type": "application/json" }); }
   // identity never comes from headers: rebuild them, dropping anything a client could use to impersonate
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
@@ -120,6 +153,7 @@ async function api(req, res, url, ip, started) {
   const outHeaders = Object.fromEntries(out.headers);
   res.writeHead(out.status, { ...BASE_HEADERS, ...outHeaders });
   res.end(Buffer.from(await out.arrayBuffer()));
+  strike(ip, out.status, url.pathname, req.method);
   log({ m: req.method, p: url.pathname, s: out.status, ms: Date.now() - started, ip });
 }
 
@@ -128,6 +162,7 @@ function staticFile(req, res, url) {
   let path;
   try { path = decodeURIComponent(url.pathname); } catch { return send(res, 400, "Bad request"); }
   if (path.includes("\0") || path.split("/").some((seg) => seg.startsWith(".") || seg === "_headers")) return send(res, 404, "Not found");
+  if (path === "/robots.txt") return send(res, 200, "User-agent: *\nDisallow: /api/\n", { "Cache-Control": "public, max-age=86400" });
   if (path.endsWith("/")) path += "index.html";
   const file = resolve(PUBLIC_DIR, "." + path);
   if (!file.startsWith(PUBLIC_DIR + sep)) return send(res, 404, "Not found");
@@ -151,6 +186,10 @@ const server = http.createServer(async (req, res) => {
     if (!allow("all:" + ip, 1200, 60_000)) return send(res, 429, "Too many requests", { "Retry-After": "60" });
     const url = new URL(req.url || "/", `${COOKIE.secure ? "https" : "http"}://${req.headers.host || "localhost"}`);
     if (url.pathname === "/") { res.writeHead(302, { ...BASE_HEADERS, Location: "/index.html" }); return res.end(); }
+    if (url.pathname === "/.well-known/security.txt" && SECURITY_CONTACT) {
+      const expires = new Date(Date.now() + 365 * 86400_000).toISOString().replace(/\.\d+Z$/, "Z");
+      return send(res, 200, `Contact: ${SECURITY_CONTACT}\nExpires: ${expires}\nPreferred-Languages: en, ru\n`, { "Cache-Control": "public, max-age=86400" });
+    }
     if (url.pathname.startsWith("/api/")) return await api(req, res, url, ip, started);
     return staticFile(req, res, url);
   } catch (error) {

@@ -5,7 +5,7 @@
  * (server/server.mjs) resolves that id from an anonymous session cookie; the Next routes can pass any other
  * trusted identity. Nothing here reads identity from request headers.
  */
-import { clientIp, fail, json, logSecurity, plausibleRun, rateLimit, sameOrigin, type D1Like } from "./forge-server.ts";
+import { clientIp, fail, invalidateBoard, json, logSecurity, now, plausibleRun, rateLimit, sameOrigin, sha256Hex, type D1Like } from "./forge-server.ts";
 
 // ------------------------------------------------------------------ catalog (prices are server-side only)
 const moduleCatalog: Record<string, { cost: number; name: string }> = {
@@ -39,6 +39,20 @@ const CATALOG: Record<string, { cost: number; name: string }> = { ...moduleCatal
 const BOSSES = ["THE ARCHIVIST", "MIRROR PROXY", "THE HOLLOW KING"];
 const RAID_HP = 5000;
 const MAX_BODY = 8 * 1024;
+const TICKET_SLACK_SEC = 5;           // clock and network slack when comparing a run's length with its ticket
+const TICKET_MAX_AGE_SEC = 3 * 3600;  // a ticket older than this cannot be used
+
+// ------------------------------------------------------------------ POST /api/run/start
+/** Issues a one-time run ticket. No session needed: a guest's first run creates the pilot only when it ends. */
+export async function handleRunStart(request: Request, db: D1Like): Promise<Response> {
+  const body = await readWriteBody(request);
+  if (body instanceof Response) return body;
+  if (!(await rateLimit(db, `ticket:${clientIp(request)}`, 120, 3600))) return fail(429, "Too many runs started. Take a short break.");
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const ticket = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  await db.prepare("INSERT INTO run_tickets (id_hash, ip, created_at) VALUES (?, ?, ?)").bind(await sha256Hex("forge-ticket:" + ticket), clientIp(request).slice(0, 64), now()).run();
+  return json({ ticket }, 201);
+}
 
 const randomCode = () => crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
 const utcDay = () => new Date().toISOString().slice(0, 10);
@@ -88,7 +102,12 @@ export async function handleProfileGet(request: Request, db: D1Like, playerId: s
     await ensurePlayer(db, playerId);
     const referral = new URL(request.url).searchParams.get("ref")?.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (referral && referral.length === 8) {
-      const inviter = await db.prepare("SELECT id FROM players WHERE referral_code = ? AND id <> ?").bind(referral, playerId).first<{ id: string }>();
+      // a referral never links two pilots that signed up from the same network (self-referral farming)
+      const inviter = await db.prepare(
+        `SELECT inv.id FROM players inv, players me
+         WHERE inv.referral_code = ? AND inv.id <> ? AND me.id = ?
+           AND (inv.signup_ip_hash IS NULL OR me.signup_ip_hash IS NULL OR inv.signup_ip_hash <> me.signup_ip_hash)`,
+      ).bind(referral, playerId, playerId).first<{ id: string }>();
       if (inviter) await db.prepare("UPDATE players SET referred_by = ? WHERE id = ? AND referred_by IS NULL AND total_runs = 0").bind(inviter.id, playerId).run();
     }
     const player = await db.prepare("SELECT callsign, credits, referral_code AS referralCode, welcome_claimed AS welcomeClaimed, lifetime_xp AS lifetimeXp, total_runs AS totalRuns, total_bosses AS totalBosses, total_kills AS totalKills, highest_level AS highestLevel, play_seconds AS playSeconds, equipped_skin AS equippedSkin, equipped_ammo AS equippedAmmo, (SELECT COUNT(*) FROM players invited WHERE invited.referred_by = players.id AND invited.referral_rewarded = 1) AS referrals FROM players WHERE id = ?").bind(playerId).first();
@@ -233,6 +252,8 @@ export async function handleRaid(request: Request, db: D1Like, playerId: string 
     if (!(await rateLimit(db, `raid:${clientIp(request)}`, 120, 60))) return fail(429, "Slow down a little.");
     const room = await db.prepare("SELECT code, boss, hp, max_hp AS maxHp, status FROM raid_rooms WHERE code = ?").bind(code).first();
     if (!room) return fail(404, "Raid room not found.");
+    const member = await db.prepare("SELECT 1 AS x FROM raid_members WHERE player_id = ? AND room_id = (SELECT id FROM raid_rooms WHERE code = ?)").bind(playerId, code).first();
+    if (!member) return fail(403, "Join this raid to see it.");
     const members = await db.prepare("SELECT callsign, damage FROM raid_members WHERE room_id = (SELECT id FROM raid_rooms WHERE code = ?)").bind(code).all();
     return json({ room, members: members.results ?? [] });
   } catch (error) {
@@ -256,9 +277,22 @@ export async function handleScore(request: Request, db: D1Like, playerId: string
       await logSecurity(db, "implausible_run", playerId, JSON.stringify(run));
       return fail(400, "That run could not be verified. Play another run and submit again.");
     }
+    // the run must have been started on the server at least `duration` seconds ago, and each ticket counts once
+    const ticket = typeof body.ticket === "string" && /^[0-9a-f]{32}$/.test(body.ticket) ? body.ticket : "";
+    const ticketHash = ticket ? await sha256Hex("forge-ticket:" + ticket) : "";
+    const t = now();
+    const claimed = ticket ? await db.prepare(
+      "UPDATE run_tickets SET used_at = ? WHERE id_hash = ? AND used_at IS NULL AND created_at <= ? AND created_at >= ?",
+    ).bind(t, ticketHash, t - Math.max(0, run.duration - TICKET_SLACK_SEC), t - TICKET_MAX_AGE_SEC).run() : null;
+    if (!(claimed?.meta?.changes ?? 0)) {
+      const row = ticket ? await db.prepare("SELECT created_at AS createdAt, used_at AS usedAt FROM run_tickets WHERE id_hash = ?").bind(ticketHash).first<{ createdAt: number; usedAt: number | null }>() : null;
+      const why = !ticket ? "missing" : !row ? "unknown" : row.usedAt ? "reused" : t - Number(row.createdAt) > TICKET_MAX_AGE_SEC ? "expired" : "faster_than_real_time";
+      await logSecurity(db, "bad_run_ticket", playerId, JSON.stringify({ why, duration: run.duration, age: row ? t - Number(row.createdAt) : null }));
+      return fail(400, "That run could not be verified. Start a new run and try again.");
+    }
     await ensurePlayer(db, playerId);
-    const existing = await db.prepare("SELECT last_submission_at AS last, play_seconds AS playSeconds, callsign, referred_by AS inviter, referral_rewarded AS rewarded FROM players WHERE id = ?")
-      .bind(playerId).first<{ last: number; playSeconds: number; callsign: string; inviter: string | null; rewarded: number }>();
+    const existing = await db.prepare("SELECT p.last_submission_at AS last, p.play_seconds AS playSeconds, p.callsign, p.referred_by AS inviter, p.referral_rewarded AS rewarded, (p.signup_ip_hash IS NOT NULL AND p.signup_ip_hash = i.signup_ip_hash) AS sameNetwork FROM players p LEFT JOIN players i ON i.id = p.referred_by WHERE p.id = ?")
+      .bind(playerId).first<{ last: number; playSeconds: number; callsign: string; inviter: string | null; rewarded: number; sameNetwork: number | null }>();
     const nowSec = Math.floor(Date.now() / 1000);
     if (existing && nowSec - Number(existing.last) < Math.max(8, Math.floor(run.duration / 2))) {
       await logSecurity(db, "run_too_fast", playerId, JSON.stringify({ since: nowSec - Number(existing.last), duration: run.duration }));
@@ -272,7 +306,7 @@ export async function handleScore(request: Request, db: D1Like, playerId: string
 
     const rewardCredits = Math.min(500, Math.floor(run.score / 350));
     // a referral pays out once, and only for a real first run
-    const payReferral = Boolean(existing?.inviter) && !Number(existing?.rewarded) && run.duration >= 60;
+    const payReferral = Boolean(existing?.inviter) && !Number(existing?.rewarded) && run.duration >= 60 && !Number(existing?.sameNetwork);
     await db.batch([
       db.prepare("UPDATE players SET callsign = ?, last_submission_at = ? WHERE id = ?").bind(callsign, nowSec, playerId),
       db.prepare(
@@ -291,6 +325,7 @@ export async function handleScore(request: Request, db: D1Like, playerId: string
       ] : []),
     ]);
     if (callsign !== existing?.callsign) await db.prepare("UPDATE raid_members SET callsign = ? WHERE player_id = ?").bind(callsign, playerId).run();
+    invalidateBoard();
 
     const before = Number(existing?.playSeconds) || 0, totalPlaySeconds = before + run.duration;
     const earned = Math.min(10, 1 + Math.floor(totalPlaySeconds / 420));

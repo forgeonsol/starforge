@@ -65,6 +65,7 @@ export function cleanup(db) {
   const t = Math.floor(Date.now() / 1000);
   db.prepare("DELETE FROM rate_limits WHERE window_start < ?").run(t - 2 * 86400);
   db.prepare("DELETE FROM player_sessions WHERE expires_at < ?").run(t);
+  db.prepare("DELETE FROM run_tickets WHERE created_at < ?").run(t - 86400);
   db.prepare("DELETE FROM security_events WHERE created_at < ?").run(t - 90 * 86400);
   const old = Date.now() - 7 * 86400 * 1000;
   db.prepare("DELETE FROM raid_members WHERE room_id IN (SELECT id FROM raid_rooms WHERE created_at < ?)").run(old);
