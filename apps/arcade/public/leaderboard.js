@@ -3,9 +3,8 @@
  * Data:
  *  - real players come from GET /api/leaderboard (best server-verified arena run per player) and are
  *    refreshed every 20 s without reloading anything;
- *  - "this device" shows your own local best when no game server is reachable (static preview);
- *  - demo profiles are generated here, kept separate, marked DEMO on every row, and move slowly: a few score
- *    changes every 7–15 s and an occasional newcomer. Every reorder comes from a score change.
+ *  - "this device" shows your own local best when you are not on the server board yet (or no server is reachable).
+ *  Only real players are listed; there are no generated profiles.
  * Rendering: rows are absolutely positioned and moved with transform transitions (FLIP-style), only the
  * visible slice of the list is in the DOM, one rAF loop drives all number tweens.
  */
@@ -18,38 +17,18 @@
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var fmt = function (n) { return Math.round(n).toLocaleString("en-US"); };
 
-  // ------------------------------------------------------------------ demo profiles (separate from real data)
+  // seeded PRNG, used for the identicon avatars
   function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-  var PRE = ["sol", "degen", "moon", "gm", "anon", "based", "ser", "pixel", "nova", "orbit", "frost", "ember", "void", "laser", "chrome", "static", "neon", "lunar", "quiet", "rapid", "solar", "dusk", "astro", "hyper", "mint", "ghost", "rune", "flux", "comet", "glitch", "salt", "kite", "zen", "velvet", "cobalt", "onyx", "crisp", "lucky", "tiny", "mega"];
-  var SUF = ["whale", "moth", "ape", "fox", "kid", "wolf", "pilot", "runner", "maxi", "sage", "hawk", "cat", "frog", "bear", "shark", "rider", "smith", "drift", "punk", "nomad", "monk", "otter", "lynx", "crab", "owl"];
-  var demoRand = rng(424242), demoUsed = {}, demoSeq = 0;
-  function demoProfile(score) {
-    var r = demoRand, name = "";
-    for (var tries = 0; tries < 20; tries++) {
-      var p = PRE[Math.floor(r() * PRE.length)], s = SUF[Math.floor(r() * SUF.length)], form = r();
-      name = form < .45 ? p + s : form < .7 ? p + "_" + s : form < .88 ? p + s + Math.floor(r() * 99) : s + "." + p;
-      if (!demoUsed[name]) break;
-    }
-    demoUsed[name] = 1;
-    return { id: "demo:" + (++demoSeq), name: name, score: score, kind: "demo", change: 0, joined: demoSeq };
-  }
   var entries = new Map();
-  (function seedDemo() {
-    for (var i = 0; i < 150; i++) {
-      var e = demoProfile(Math.round(600 + Math.pow(demoRand(), 2.4) * 23000)), c = demoRand();
-      e.change = c < .62 ? 0 : c < .82 ? 1 + Math.floor(demoRand() * 3) : -(1 + Math.floor(demoRand() * 3));
-      entries.set(e.id, e);
-    }
-  })();
 
   // ------------------------------------------------------------------ ranking
-  var ranked = [], lastUpdate = Date.now(), liveState = ONLINE ? "connecting" : "preview";
+  var ranked = [], lastUpdate = Date.now(), liveState = ONLINE ? "connecting" : "device";
   function rerank(mark) {
     var prev = new Map(ranked.map(function (e, i) { return [e.id, i + 1]; }));
     ranked = Array.from(entries.values()).sort(function (a, b) { return b.score - a.score || a.joined - b.joined; });
     ranked.forEach(function (e, i) {
       var was = prev.get(e.id), now = i + 1; e.rank = now;
-      if (mark && was && was !== now) { if (e.kind !== "real") e.change = was - now; e.flash = was > now ? "up" : "down"; }
+      if (mark && was && was !== now) e.flash = was > now ? "up" : "down";
       if (mark && !was && prev.size) e.flash = "new";
     });
     lastUpdate = Date.now(); boards.forEach(function (b) { b.render(); });
@@ -81,22 +60,7 @@
     if (best > 0) entries.set("local", { id: "local", name: name, score: best, kind: "local", you: true, change: 0, joined: 1e9 }); else entries.delete("local");
   }
 
-  // slow demo activity: a few score changes every 8–18 s, an occasional newcomer
-  var demoTimer = null, visibleBoards = 0, nextNewcomer = Date.now() + 60000 + Math.random() * 60000;
-  function demoTick() {
-    clearTimeout(demoTimer);
-    if (!document.hidden && visibleBoards > 0) {
-      var demos = ranked.filter(function (e) { return e.kind === "demo"; }), n = Math.random() < .7 ? 1 : 2;
-      for (var i = 0; i < n && demos.length; i++) {
-        // active players are more often near the top, but anyone can post a run
-        var idx = Math.floor(Math.pow(Math.random(), 3) * demos.length), e = demos[idx];
-        e.score += Math.round(80 + Math.random() * (e.rank < 20 ? 500 : 1100));
-      }
-      if (Date.now() > nextNewcomer && entries.size < 230) { var ne = demoProfile(Math.round(800 + Math.random() * 3200)); entries.set(ne.id, ne); nextNewcomer = Date.now() + 70000 + Math.random() * 80000; }
-      rerank(true);
-    }
-    demoTimer = setTimeout(demoTick, 7000 + Math.random() * 8000);
-  }
+  var visibleBoards = 0;
 
   // ------------------------------------------------------------------ avatars: symmetric 5×5 identicon from the id
   var avCache = new Map();
@@ -152,10 +116,8 @@
     return isFinite(this.tab) ? list.slice(0, this.tab) : list;
   };
   Board.prototype.renderHead = function () {
-    var head = this.root.querySelector(".lb-head"), state = liveState === "live" ? L("Live", "实时") : liveState === "offline" ? L("Reconnecting", "重新连接中") : liveState === "connecting" ? L("Connecting", "连接中") : L("Preview", "预览");
-    var demoCount = ranked.filter(function (e) { return e.kind === "demo"; }).length;
-    head.innerHTML = '<div class="lb-status"><i class="lb-dot ' + liveState + '"></i><span class="mono">' + state + '</span><span class="mono lb-time">' + L("Updated ", "更新于 ") + new Date(lastUpdate).toLocaleTimeString(lang() === "zh" ? "zh-CN" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + "</span>" +
-      (demoCount ? '<span class="mono lb-demo-note" title="' + esc(L("Rows marked DEMO are simulated profiles, not real players.", "标记 DEMO 的行为模拟资料，不是真实玩家。")) + '">' + L("Includes demo profiles", "包含演示资料") + "</span>" : "") + "</div>";
+    var head = this.root.querySelector(".lb-head"), state = liveState === "live" ? L("Live", "实时") : liveState === "offline" ? L("Reconnecting", "重新连接中") : liveState === "connecting" ? L("Connecting", "连接中") : L("This device", "本设备");
+    head.innerHTML = '<div class="lb-status"><i class="lb-dot ' + liveState + '"></i><span class="mono">' + state + '</span><span class="mono lb-time">' + L("Updated ", "更新于 ") + new Date(lastUpdate).toLocaleTimeString(lang() === "zh" ? "zh-CN" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + "</span></div>";
     if (!this.compact) {
       var tabs = [["10", "Top 10"], ["50", "Top 50"], ["all", L("All", "全部")]], cur = isFinite(this.tab) ? String(this.tab) : "all";
       this.root.querySelector(".lb-tabs").innerHTML = tabs.map(function (t) { return '<button role="tab" data-tab="' + t[0] + '" class="' + (t[0] === cur ? "on" : "") + '">' + t[1] + "</button>"; }).join("");
@@ -169,7 +131,10 @@
   Board.prototype.renderRows = function () {
     var data = this.data(), ROW = this.ROW, self = this, empty = this.root.querySelector(".lb-empty");
     this.list.style.height = data.length * ROW + "px";
-    empty.hidden = data.length > 0; if (!data.length) empty.textContent = this.q ? L("No player matches that search.", "没有匹配的玩家。") : L("No runs yet.", "暂无成绩。");
+    empty.hidden = data.length > 0;
+    if (!data.length) empty.innerHTML = this.q ? esc(L("No player matches that search.", "没有匹配的玩家。"))
+      : "<span>" + esc(L("No runs yet. Finish a run and take the first spot.", "暂无成绩。完成一局，拿下第一名。")) + "</span>" +
+        (/game\.html$/.test(location.pathname) ? "" : '<a class="lb-empty-cta" href="game.html">' + esc(L("Launch a run", "开始一局")) + " →</a>");
     var top = this.compact ? 0 : this.view.scrollTop, h = this.compact ? data.length * ROW : (this.view.clientHeight || 600), from = Math.max(0, Math.floor(top / ROW) - 6), to = Math.min(data.length, Math.ceil((top + h) / ROW) + 6);
     var keep = new Set();
     for (var i = from; i < to; i++) {
@@ -191,9 +156,9 @@
     var q = function (s) { return row.querySelector(s); };
     if (row._rank !== e.rank) { row._rank = e.rank; q(".lb-rank").textContent = "#" + String(e.rank).padStart(2, "0"); row.classList.toggle("podium", e.rank <= 3); }
     if (row._id !== e.id) { row._id = e.id; q(".lb-av").innerHTML = avatar(e); q(".lb-name b").textContent = e.name; }
-    var tag = e.kind === "demo" ? '<span class="lb-tag demo">DEMO</span>' : e.kind === "local" ? '<span class="lb-tag you">' + L("YOU · THIS DEVICE", "你 · 本设备") + "</span>" : (e.you ? '<span class="lb-tag you">' + L("YOU", "你") + "</span>" : "") + '<span class="lb-tag ok" title="' + esc(L("Real player · run verified by the server", "真实玩家 · 成绩经服务器验证")) + '">✓</span>';
+    var tag = e.kind === "local" ? '<span class="lb-tag you">' + L("YOU · THIS DEVICE", "你 · 本设备") + "</span>" : (e.you ? '<span class="lb-tag you">' + L("YOU", "你") + "</span>" : "") + '<span class="lb-tag ok" title="' + esc(L("Real player · run verified by the server", "真实玩家 · 成绩经服务器验证")) + '">✓</span>';
     if (row._tag !== tag) { row._tag = tag; q(".lb-name em").innerHTML = tag; }
-    row.classList.toggle("is-you", !!e.you); row.classList.toggle("is-demo", e.kind === "demo");
+    row.classList.toggle("is-you", !!e.you);
     var sc = q(".lb-score"); if (sc._v === undefined) { sc._v = e.score; sc.textContent = fmt(e.score); } else if (Math.round(sc._v) !== e.score && (!sc._t || sc._t.to !== e.score)) tweenTo(sc, sc._v, e.score);
     var c = e.kind === "real" && e.isNew ? "new" : e.change || 0, ch = q(".lb-chg"), txt = c === "new" ? "NEW" : c > 0 ? "▲ " + c : c < 0 ? "▼ " + Math.abs(c) : "—";
     if (ch.textContent !== txt) { ch.textContent = txt; ch.className = "lb-chg mono " + (c === "new" ? "new" : c > 0 ? "pos" : c < 0 ? "neg" : ""); }
@@ -208,7 +173,6 @@
   // ------------------------------------------------------------------ boot
   localEntry(); rerank(false);
   if (ONLINE) poll();
-  demoTimer = setTimeout(demoTick, 6000 + Math.random() * 6000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && ONLINE) poll(); });
   function relabel() { setTimeout(function () { boards.forEach(function (b) { b.rows.forEach(function (r) { r._tag = null; }); b.render(); }); }, 60); }
   document.addEventListener("click", function (ev) { if (ev.target.closest && ev.target.closest("[data-lang], #langToggle")) relabel(); });

@@ -13,7 +13,7 @@
   function buyBtn(extra) {
     return live
       ? '<a class="btn sol-cta ' + (extra || "") + '" href="' + esc(T.buyUrl) + '" target="_blank" rel="noopener"><span>' + L("Buy " + sym, "购买 " + sym) + '</span><span class="arr">↗</span></a>'
-      : '<a class="btn sol-cta ' + (extra || "") + '" href="#launch" data-soon="buy"><span>' + L("Buy " + sym, "购买 " + sym) + '</span><em class="soon-tag">' + L("Soon", "即将") + "</em></a>";
+      : '<a class="btn sol-cta ' + (extra || "") + '" href="#launch" data-soon="buy"><span>' + L("Buy " + sym, "购买 " + sym) + "</span></a>";
   }
   function caValue() { return T.contract ? '<code class="ca-code">' + esc(T.contract) + "</code>" : '<span class="ca-tba">' + L("Announced at launch", "上线时公布") + "</span>"; }
   function caCopy() { return T.contract ? '<button class="ca-copy" type="button" data-copy-ca>' + L("Copy", "复制") + "</button>" : ""; }
@@ -24,11 +24,11 @@
     var old = actions.querySelector(".hdr-buy"); if (old) old.remove();
     var a = document.createElement("a"); a.className = "top-link hdr-buy";
     if (live) { a.href = T.buyUrl; a.target = "_blank"; a.rel = "noopener"; a.innerHTML = "<span>" + L("Buy " + sym, "购买 " + sym) + '</span><span class="arr">↗</span>'; }
-    else { a.href = "#launch"; a.dataset.soon = "buy"; a.innerHTML = "<span>" + L("Buy " + sym, "购买 " + sym) + '</span><sup>' + L("Soon", "即将") + "</sup>"; }
+    else { a.href = "#launch"; a.dataset.soon = "buy"; a.innerHTML = "<span>" + L("Buy " + sym, "购买 " + sym) + "</span>"; }
     play.before(a);
     // sub-bar under the nav: contract + official links, like a ticker line
     var sub = document.getElementById("topSub"); if (!sub) return;
-    var link = function (label, url, kind) { return url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + label + " ↗</a>" : '<a href="#launch" data-soon="' + kind + '">' + label + "<sup>" + L("Soon", "即将") + "</sup></a>"; };
+    var link = function (label, url, kind) { return url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + label + " ↗</a>" : '<a href="#launch" data-soon="' + kind + '">' + label + "</a>"; };
     sub.innerHTML = '<span class="sub-ca"><b>CA</b> ' + (T.contract ? '<button type="button" class="sub-copy" data-copy-ca title="' + L("Copy contract", "复制合约") + '">' + esc(T.contract.slice(0, 4) + "…" + T.contract.slice(-5)) + "</button>" : '<span class="sub-tba">' + L("Announced at launch", "上线时公布") + "</span>") + '</span><span class="sub-chain">' + esc(chain) + '</span><span class="sub-sep"></span><span class="sub-links">' +
       link(live ? L("Buy", "购买") : L("Buy", "购买"), live ? T.buyUrl : "", "buy") + link(L("Chart", "行情"), T.chartUrl, "chart") + (T.links.x ? link("X", T.links.x) : "") + (T.links.telegram ? link("Telegram", T.links.telegram) : "") + "</span>";
   }
@@ -51,7 +51,7 @@
     if (!sec) { sec = document.createElement("section"); sec.className = "sec launch stage-auto"; sec.id = "launch"; var after = document.getElementById("ecosystem") || document.getElementById("token"); if (after) after.after(sec); else document.querySelector("main").appendChild(sec); }
     var btn = function (kind, label, url, icon) {
       if (url) return '<a class="btn ghost" href="' + esc(url) + '" target="_blank" rel="noopener"><span>' + label + '</span><span class="arr">' + (icon || "↗") + "</span></a>";
-      return '<a class="btn ghost is-soon" href="#launch" data-soon="' + kind + '"><span>' + label + '</span><em class="soon-tag">' + L("Soon", "即将") + "</em></a>";
+      return '<a class="btn ghost is-soon" href="#launch" data-soon="' + kind + '"><span>' + label + "</span></a>";
     };
     var social = (T.links.x ? btn("x", "X", T.links.x) : "") + (T.links.telegram ? btn("tg", "Telegram", T.links.telegram) : "");
     var steps = [
@@ -66,8 +66,8 @@
           '<div class="launch-steps">' + steps.map(function (s, i) { return '<article class="launch-step rv" style="--d:' + (.08 + i * .08) + 's"><span class="mono">0' + (i + 1) + "</span><div><h4>" + s[0] + "</h4><p>" + s[1] + "</p></div></article>"; }).join("") + "</div>" +
         "</div>" +
         '<div class="launch-card rv" id="launchCard">' +
-          '<div class="launch-top"><span class="launch-pill ' + (live ? "is-live" : "") + '"><i></i>' + (live ? L("TRADING LIVE", "交易已开放") : L("COMING SOON", "即将上线")) + '</span><span class="chain-badge"><i></i>' + esc(chain.toUpperCase()) + "</span></div>" +
-          '<h3 class="launch-h">' + (live ? L(sym + " is live.", sym + " 已上线。") : L(sym + " launches soon.", sym + " 即将上线。")) + "</h3>" +
+          '<div class="launch-top"><span class="launch-pill ' + (live ? "is-live" : "") + '"><i></i>' + (live ? L("TRADING LIVE", "交易已开放") : L("PRE-LAUNCH", "上线前")) + '</span><span class="chain-badge"><i></i>' + esc(chain.toUpperCase()) + "</span></div>" +
+          '<h3 class="launch-h">' + (live ? L(sym + " is live.", sym + " 已上线。") : L(sym + " launches on " + chain + ".", sym + " 将在 " + chain + " 上线。")) + "</h3>" +
           (!isNaN(launchAt) && launchAt > Date.now() ? '<div class="launch-count" id="launchCount">' + ["d", "h", "m", "s"].map(function (u) { return '<div><b data-u="' + u + '">00</b><span class="mono">' + L({ d: "Days", h: "Hours", m: "Min", s: "Sec" }[u], { d: "天", h: "时", m: "分", s: "秒" }[u]) + "</span></div>"; }).join("") + "</div>" : "") +
           '<div class="launch-ca"><span class="mono">' + L("Official contract", "官方合约地址") + '</span><div class="launch-ca-row">' + caValue() + caCopy() + "</div></div>" +
           '<div class="launch-btns">' + buyBtn("") + btn("chart", L("Chart", "行情"), T.chartUrl) + social + '<a class="btn ghost" href="game.html#token"><span>' + L("Play now", "立即游玩") + '</span><span class="arr">→</span></a></div>' +

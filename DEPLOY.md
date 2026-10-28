@@ -98,7 +98,7 @@ COOKIE_SECURE=0 DEV_SEED=1 node --experimental-strip-types server/server.mjs
 ```
 
 ## Token launch
-At launch, fill in `apps/arcade/public/token-config.js` with the contract address and links, then run `bash infra/deploy.sh`. Until then, every buy and chart control shows "soon".
+At launch, fill in `apps/arcade/public/token-config.js` with the contract address and links, then run `bash infra/deploy.sh`. Until then, the buy and chart buttons lead to the launch section, which explains that trading opens at launch; the wallet button in the game stays hidden.
 
 ## The original host (Cloudflare build)
 The Next.js/vinext files in `apps/arcade` still build for the host the project started on: `corepack pnpm install && corepack pnpm build`, with migrations applied to D1.
