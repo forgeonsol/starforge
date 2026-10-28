@@ -15,7 +15,7 @@
   // ------------------------------------------------------------------ DOM scaffold (before game.js wires the router)
   var nav = $(".nav"), pilotBtn = nav && nav.querySelector('[data-page="campaign"]');
   if (nav) { var b = document.createElement("button"); b.dataset.page = "token"; b.className = "nav-token"; b.innerHTML = '<i class="tk-navdot"></i>TOKEN'; if (pilotBtn) pilotBtn.after(b); else nav.appendChild(b); }
-  var account = $(".account"); if (account) { var pill = document.createElement("button"); pill.className = "tk-pill"; pill.id = "tkPill"; pill.type = "button"; pill.setAttribute("aria-label", "Open wallet"); pill.innerHTML = COIN + '<b id="tkBal">0</b><small>SOON</small><i class="tk-pend" id="tkPend" hidden></i>'; account.prepend(pill); }
+  var account = $(".account"); if (account) { var pill = document.createElement("button"); pill.className = "tk-pill"; pill.id = "tkPill"; pill.type = "button"; pill.setAttribute("aria-label", "Open wallet"); pill.innerHTML = COIN + '<b id="tkBal">0</b><i class="tk-pend" id="tkPend" hidden></i>'; account.prepend(pill); }
   var page = document.createElement("section"); page.className = "page portal-page tk-page"; page.id = "page-token";
   var lastPage = $$(".page").pop(); (lastPage || $(".shell")).after ? lastPage.after(page) : $(".shell").appendChild(page);
   page.innerHTML =
@@ -40,12 +40,13 @@
   function launchButtons(small) {
     var sz = small ? " small" : "";
     var buy = tokLive ? '<a class="tk-btn tk-buy' + sz + '" href="' + esc(TK.buyUrl) + '" target="_blank" rel="noopener">' + L("Buy $FORGE ↗", "购买 $FORGE ↗") + "</a>"
-      : '<a class="tk-btn tk-buy' + sz + '" href="index.html#launch">' + L("Buy $FORGE", "购买 $FORGE") + ' <em class="tk-soon">' + L("SOON", "即将") + "</em></a>";
-    return buy + '<button class="tk-btn ghost' + sz + '" type="button" data-connect>' + L("Connect wallet", "连接钱包") + (TK.walletConnect ? "" : ' <em class="tk-soon">' + L("SOON", "即将") + "</em>") + "</button>";
+      : '<a class="tk-btn tk-buy' + sz + '" href="index.html#launch">' + L("Buy $FORGE", "购买 $FORGE") + "</a>";
+    // the wallet button appears only once a wallet adapter is wired in (FORGE_TOKEN.walletConnect)
+    return buy + (TK.walletConnect ? '<button class="tk-btn ghost' + sz + '" type="button" data-connect>' + L("Connect wallet", "连接钱包") + "</button>" : "");
   }
   function renderLaunch() {
     var el = $("#tkLaunch", page); if (!el) return;
-    el.innerHTML = '<div class="tk-launch-l"><span class="tk-launch-pill' + (tokLive ? " live" : "") + '"><i></i>' + (tokLive ? L("TRADING LIVE", "交易已开放") : L("TOKEN LAUNCH · COMING SOON", "代币上线 · 即将开启")) + '</span><span class="tk-chain">' + esc(chainName.toUpperCase()) + "</span>" +
+    el.innerHTML = '<div class="tk-launch-l"><span class="tk-launch-pill' + (tokLive ? " live" : "") + '"><i></i>' + (tokLive ? L("TRADING LIVE", "交易已开放") : L("TOKEN LAUNCH", "代币上线")) + '</span><span class="tk-chain">' + esc(chainName.toUpperCase()) + "</span>" +
       '<p>' + (tokLive ? L("$FORGE is live. Wallet connection rolls into the game next — until then you play with your in-game balance.", "$FORGE 已上线。钱包连接即将接入游戏——在此之前使用游戏内余额。")
         : L("Everything here launches together with $FORGE on " + chainName + ". Until trading opens you play with an in-game balance on this device.", "这里的一切将与 " + chainName + " 上的 $FORGE 同步上线。交易开放前，你使用保存在本设备的游戏内余额。")) + "</p></div>" +
       '<div class="tk-launch-r">' + launchButtons(false) + "</div>";
@@ -60,8 +61,8 @@
     $(".tk-x", modal).onclick = closeModal; $("[data-x]", modal).onclick = closeModal;
   }
   function copy() {
-    var T = { eyebrow: L("$FORGE TOKEN · COMING SOON", "$FORGE 代币 · 即将上线"), title: L("One token.<br>The whole forge.", "一枚代币，<br>贯通整座熔炉。"), sub: L("Spend it on cosmetics, enter raids and tournaments, unlock premium missions and follow the buyback plan. On-chain $FORGE is coming soon — until launch, your in-game balance is kept on this device.", "用于外观、参加突袭与锦标赛、解锁高级任务并了解回购计划。链上 $FORGE 即将上线——在此之前，游戏内余额保存在本设备。"),
-      balLabel: L("IN-GAME BALANCE", "游戏内余额"), demoTag: L("coming soon", "即将上线"), wallet: L("Wallet & history", "钱包与记录"), claimAll: L("Claim", "领取") };
+    var T = { eyebrow: L("$FORGE TOKEN", "$FORGE 代币"), title: L("One token.<br>The whole forge.", "一枚代币，<br>贯通整座熔炉。"), sub: L("Spend it on cosmetics, enter raids and tournaments, unlock premium missions and follow the buyback plan. Until the token launches, your in-game balance is kept on this device.", "用于外观、参加突袭与锦标赛、解锁高级任务并了解回购计划。代币上线前，游戏内余额保存在本设备。"),
+      balLabel: L("IN-GAME BALANCE", "游戏内余额"), demoTag: L("in-game", "游戏内"), wallet: L("Wallet & history", "钱包与记录"), claimAll: L("Claim", "领取") };
     $$("[data-tk]", page).forEach(function (n) { var v = T[n.dataset.tk]; if (v != null) n.innerHTML = v; });
     renderLaunch();
     $$(".tk-tabs button", page).forEach(function (b) { b.textContent = L(TABS[b.dataset.tab][0], TABS[b.dataset.tab][1]); b.classList.toggle("on", b.dataset.tab === tab); });
@@ -173,7 +174,7 @@
     var bal = E.balance(), after = bal - opts.price, can = after >= 0;
     modal.innerHTML = '<div class="tk-dialog" role="dialog" aria-modal="true"><button class="tk-x" aria-label="Close">×</button><div class="tk-dialog-art">' + (opts.art || "") + '</div><div class="tk-dialog-body"><span class="tk-mono">' + esc(opts.kicker) + "</span><h3>" + esc(opts.title) + "</h3><p>" + esc(opts.sub || "") + "</p>" +
       '<dl class="tk-ledger"><div><dt>' + L("Price", "价格") + "</dt><dd>" + COIN + fmt(opts.price) + "</dd></div><div><dt>" + L("Balance", "余额") + "</dt><dd>" + fmt(bal) + "</dd></div><div><dt>" + L("After", "交易后") + '</dt><dd class="' + (can ? "" : "neg") + '">' + fmt(after) + "</dd></div></dl>" +
-      '<div class="tk-sim">' + L("In-game balance · on-chain $FORGE coming soon", "游戏内余额 · 链上 $FORGE 即将上线") + "</div>" +
+      '<div class="tk-sim">' + L("In-game balance · not on-chain yet", "游戏内余额 · 尚未上链") + "</div>" +
       '<div class="tk-dialog-actions"><button class="tk-btn ghost" data-x>' + L("Cancel", "取消") + '</button><button class="tk-btn" data-go ' + (can ? "" : "disabled") + ">" + (can ? esc(opts.confirm) : L("Not enough $FORGE", "余额不足")) + "</button></div>" +
       '<div class="tk-steps"><i></i><span></span></div></div></div>';
     modal.classList.add("on"); modal.setAttribute("aria-hidden", "false");
@@ -231,7 +232,7 @@
       '<div class="tk-cup-actions">' + (st.entered ? '<span class="tk-badge ok">✓ ' + L("Entered · best", "已报名 · 最佳") + " " + fmt(st.entry.best) + "</span>" + (c.mode ? '<button class="tk-btn" data-play-mode="' + c.mode + '">' + L("Play Boss Rush", "开始首领冲刺") + "</button>" : '<button class="tk-btn" data-goto-page="arena">' + L("Play a run", "开始一局") + "</button>") + '<button class="tk-btn ghost" data-endnow>' + L("End round now", "立即结算") + "</button>" : needsMode ? '<button class="tk-btn" data-goto-tab="missions">' + L("Unlock Boss Rush first", "请先解锁首领冲刺") + "</button>" : '<button class="tk-btn" data-join>' + L("Enter tournament", "报名参赛") + " · " + fmt(c.entry) + "</button>") + "</div></div>" +
       '<div class="tk-cup-grid"><div class="tk-board"><div class="tk-podium">' + top.slice(0, 3).map(function (p, i) { return '<div class="tk-pod p' + (i + 1) + (p.you ? " you" : "") + '"><span>#' + (i + 1) + "</span><b>" + esc(p.name) + "</b><small>" + fmt(p.score) + "</small><i></i></div>"; }).join("") + "</div>" +
         '<div class="tk-rows">' + top.concat(showYou ? [you] : []).map(function (p) { return '<div class="tk-row' + (p.you ? " you" : "") + '"><span class="tk-rk">' + p.rank + '</span><span class="tk-av">' + esc(p.name.slice(0, 2)) + "</span><b>" + esc(p.name) + '</b><span class="tk-bar"><i style="width:' + Math.max(3, p.score / maxScore * 100).toFixed(1) + '%"></i></span><span class="tk-sc">' + fmt(p.score) + '</span><span class="tk-pz">' + (p.rank <= 10 ? "+" + fmt(c.pool * E.payout[p.rank - 1]) : "—") + "</span></div>"; }).join("") + "</div></div>" +
-        '<div class="tk-payout"><h4>' + L("Reward distribution", "奖励分配") + "</h4>" + E.payout.map(function (p, i) { return '<div class="tk-pay"><span>#' + (i + 1) + '</span><span class="tk-bar"><i style="width:' + (p / E.payout[0] * 100) + '%"></i></span><b>' + Math.round(p * 1000) / 10 + "%</b><small>" + fmt(c.pool * p) + "</small></div>"; }).join("") + '<p class="tk-note">' + L("Prizes are paid to your in-game balance; rivals are AI pilots until launch. On-chain prize pools are coming soon.", "奖励发放至游戏内余额；上线前对手为 AI 飞行员。链上奖池即将上线。") + "</p></div></div>" +
+        '<div class="tk-payout"><h4>' + L("Reward distribution", "奖励分配") + "</h4>" + E.payout.map(function (p, i) { return '<div class="tk-pay"><span>#' + (i + 1) + '</span><span class="tk-bar"><i style="width:' + (p / E.payout[0] * 100) + '%"></i></span><b>' + Math.round(p * 1000) / 10 + "%</b><small>" + fmt(c.pool * p) + "</small></div>"; }).join("") + '<p class="tk-note">' + L("Prizes are paid to your in-game balance; rivals are AI pilots.", "奖励发放至游戏内余额；对手为 AI 飞行员。") + "</p></div></div>" +
       '<div class="tk-sec-head"><h3>' + L("Your results", "你的成绩") + "</h3></div>" + (S.cups.results.length ? '<div class="tk-table">' + S.cups.results.slice(0, 8).map(function (r) { return '<div class="tk-tr"><span>' + esc(r.name) + "</span><span>#" + r.rank + " / " + r.of + "</span><span>" + fmt(r.score) + "</span><span>" + (r.reward ? "+" + fmt(r.reward) : "—") + "</span><span>" + (r.reward && !r.claimed ? '<button class="tk-btn small mint" data-claimcup="' + r.key + '">' + L("Claim", "领取") + "</button>" : r.reward ? "✓ " + L("Claimed", "已领取") : L("Outside prizes", "未进奖励区")) + "</span></div>"; }).join("") + "</div>" : '<div class="tk-empty">' + L("Finish a round to see results here.", "结算一轮后成绩会显示在这里。") + "</div>") + "</div>";
     $$("[data-cup]", el).forEach(function (b) { b.onclick = function () { cupSel = b.dataset.cup; renderCups(); }; });
     var j = $("[data-join]", el); if (j) j.onclick = function () { txFlow({ kicker: L("TOURNAMENT ENTRY", "锦标赛报名"), title: E.name(c), sub: L(c.desc, c.descZh), art: '<img src="assets/3d/guardians/guardian-' + (c.mode ? 0 : 2) + '-1.webp" alt="">', price: c.entry, confirm: L("Pay entry", "支付报名费"), run: function () { return E.enterCup(c.id); }, doneTitle: L("You're in. Every run now counts.", "报名成功，接下来每局都计分。"), onDone: function () { renderCups(); } }); };
@@ -314,7 +315,7 @@
     var S = E.state(), pend = S.pending.reduce(function (a, p) { return a + p.amount; }, 0), ICON = { purchase: "↗", entry: "↗", unlock: "↗", reward: "↙", claim: "↙", prize: "★", grant: "◆" };
     var inv = ["skins", "outfits", "fx", "maps"].map(function (c) { return '<div><small>' + L(CATS[c][0], CATS[c][1]) + "</small><b>" + S.owned[c].length + "</b></div>"; }).join("");
     drawer.innerHTML = '<div class="tk-dr-head"><span class="tk-mono">' + L("WALLET", "钱包") + '</span><button class="tk-x" aria-label="Close">×</button></div>' +
-      '<div class="tk-dr-bal">' + COIN + "<div><small>" + L("In-game balance", "游戏内余额") + "</small><b>" + fmt(S.balance) + ' <span>$FORGE</span></b></div></div><div class="tk-dr-prov"><i></i>' + L("Wallet connection coming soon · balance kept on this device", "钱包连接即将上线 · 余额保存在本设备") + '</div><div class="tk-dr-launch">' + launchButtons(true) + "</div>" +
+      '<div class="tk-dr-bal">' + COIN + "<div><small>" + L("In-game balance", "游戏内余额") + "</small><b>" + fmt(S.balance) + ' <span>$FORGE</span></b></div></div><div class="tk-dr-prov"><i></i>' + L("Balance kept on this device", "余额保存在本设备") + '</div><div class="tk-dr-launch">' + launchButtons(true) + "</div>" +
       '<div class="tk-dr-sec"><h5>' + L("Rewards to claim", "待领取奖励") + "</h5>" + (S.pending.length ? S.pending.slice(0, 8).map(function (p) { return '<div class="tk-dr-row"><span>' + esc(p.memo) + "</span><b>+" + fmt(p.amount) + "</b></div>"; }).join("") + '<button class="tk-btn mint wide" data-claimall>' + L("Claim all", "全部领取") + " · +" + fmt(pend) + "</button>" : '<div class="tk-empty small">' + L("Play the arena, raids or pilot missions to earn rewards.", "游玩竞技场、突袭或飞行员任务以赚取奖励。") + "</div>") + "</div>" +
       '<div class="tk-dr-sec"><h5>' + L("Inventory", "物品") + '</h5><div class="tk-dr-inv">' + inv + "</div></div>" +
       '<div class="tk-dr-sec"><h5>' + L("Transaction history", "交易记录") + '</h5><div class="tk-dr-hist">' + S.history.slice(0, 40).map(function (h) { return '<div class="tk-dr-tx"><i class="' + (h.amount < 0 ? "out" : "in") + '">' + (ICON[h.type] || "·") + "</i><div><b>" + esc(h.memo) + "</b><small>" + new Date(h.t).toLocaleString() + (h.txId ? " · " + esc(h.txId) : "") + '</small></div><span class="' + (h.amount < 0 ? "neg" : "pos") + '">' + (h.amount > 0 ? "+" : "") + (h.amount ? fmt(h.amount) : "—") + "</span></div>"; }).join("") + "</div></div>" +

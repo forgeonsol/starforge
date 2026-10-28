@@ -53,7 +53,7 @@ Starforge is **pre-launch**. Be clear about what is live and what is not:
 | Landing page, arena, pilot campaign, hangar | Live in the build |
 | Pilot accounts without registration, score, shop, raid and leaderboard APIs | Implemented, tested end-to-end |
 | Self-hosted deployment (Docker + Caddy, automatic HTTPS, backups) | Ready; see [DEPLOY.md](DEPLOY.md) |
-| Leaderboard demo profiles | Generated in the browser, always tagged **DEMO**, never stored |
+| Leaderboard | Real players only (best verified run each); before the first run it invites the visitor to play |
 | $FORGE token, buy and chart links | **Not launched.** The contract address will be announced at launch |
 | Run tickets (a run can't be submitted faster than real time, each counts once) | Implemented |
 | Server-side replay verification of runs | Not yet; see [Limitations](#limitations) |

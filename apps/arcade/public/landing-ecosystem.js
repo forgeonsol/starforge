@@ -22,7 +22,7 @@
   ];
   var active = 0, timer = null, held = 0;
   function chart() { var pts = [32, 40, 36, 48, 44, 56, 52, 64, 60, 70, 66, 78]; return '<svg viewBox="0 0 240 150" class="eco-chart" aria-hidden="true"><defs><linearGradient id="ecg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9945ff" stop-opacity=".45"/><stop offset="1" stop-color="#14f195" stop-opacity="0"/></linearGradient><linearGradient id="ecs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14f195"/><stop offset="1" stop-color="#9945ff"/></linearGradient></defs>' + pts.map(function (v, i) { return '<rect x="' + (14 + i * 18) + '" y="' + (130 - v * 1.4) + '" width="10" height="' + (v * 1.4) + '" rx="2" fill="' + (i === pts.length - 1 ? "url(#ecs)" : "rgba(255,255,255,.16)") + '" style="--i:' + i + '"/>'; }).join("") + '<path d="M19 ' + (130 - pts[0] * 1.4) + pts.map(function (v, i) { return " L" + (19 + i * 18) + " " + (130 - v * 1.4 - 8); }).join("") + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-dasharray="3 4"/></svg>'; }
-  function badge(s) { return '<span class="eco-badge ' + (s === "planned" ? "planned" : "demo") + '">' + L("COMING SOON", "即将上线") + "</span>"; }
+  function badge() { return ""; }
   var hubSec = document.getElementById("ecosystem");
   if (!hubSec) { hubSec = document.createElement("section"); hubSec.className = "sec stage-fit"; hubSec.id = "ecosystem"; sec.after(hubSec); }
   function render() {
@@ -34,15 +34,15 @@
 "</div>";
     hubSec.innerHTML = '<div class="wrap"><div class="sec-head"><div><span class="label idx rv">' + L("HOW IT CONNECTS", "运作方式") + '</span><h2 class="rv" style="--d:.08s">' + L("Four systems.<br>One core.", "四个系统，<br>一个核心。") + '</h2></div><p class="rv" style="--d:.16s">' + L("Tap a system to see how the token moves through it — then open it in the game.", "点击一个系统，查看代币如何在其中流转，并可直接在游戏中打开。") + "</p></div>" +
       '<div class="eco-hub rv fill" id="ecoHub"><div class="eco-stage"><canvas id="ecoCv" aria-hidden="true"></canvas><div class="eco-core"><img src="logo.svg" alt=""><span>$FORGE</span></div>' +
-        NODES.map(function (n, i) { return '<button class="eco-node n' + i + (i === active ? " on" : "") + '" data-i="' + i + '" type="button"><i></i><b>' + L(n.t[0], n.t[1]) + "</b><small>" + L("Coming soon", "即将上线") + "</small></button>"; }).join("") +
+        NODES.map(function (n, i) { return '<button class="eco-node n' + i + (i === active ? " on" : "") + '" data-i="' + i + '" type="button"><i></i><b>' + L(n.t[0], n.t[1]) + "</b></button>"; }).join("") +
         '<span class="eco-hint mono">' + L("INTERACTIVE · TAP A SYSTEM", "可交互 · 点击系统") + "</span></div>" +
         '<div class="eco-panel" id="ecoPanel"></div></div>' +
-      '<p class="utility-note eco-note">' + L("$FORGE token integration is coming soon. Until launch, in-game balances, purchases, raids and tournaments run inside the game and nothing is on-chain yet. Buybacks are a planned mechanism shown with illustrative data only; no buyback has been executed and nothing here is a promise of returns.", "$FORGE 代币接入即将上线。上线前，游戏内余额、购买、突袭与锦标赛均在游戏内运行，尚未上链。回购为计划中的机制，仅以示意数据展示；尚未执行任何回购，本页内容不构成任何收益承诺。") + "</p></div>";
+      '<p class="utility-note eco-note">' + L("Until the $FORGE token launches, in-game balances, purchases, raids and tournaments run inside the game and nothing is on-chain yet. Buybacks are a planned mechanism shown with illustrative data only; no buyback has been executed and nothing here is a promise of returns.", "$FORGE 代币上线前，游戏内余额、购买、突袭与锦标赛均在游戏内运行，尚未上链。回购为计划中的机制，仅以示意数据展示；尚未执行任何回购，本页内容不构成任何收益承诺。") + "</p></div>";
     panel(); bind();
   }
   function panel() {
     var n = NODES[active], p = document.getElementById("ecoPanel"); if (!p) return;
-    p.innerHTML = '<span class="mono">' + L("SYSTEM", "系统") + " 0" + (active + 1) + " · " + (n.status === "planned" ? L("COMING SOON", "即将上线") : L("PREVIEW IN THE GAME · TOKEN COMING SOON", "游戏内可预览 · 代币即将上线")) + "</span><h3>" + L(n.t[0], n.t[1]) + "</h3><p>" + L(n.flow[0], n.flow[1]) + '</p><div class="eco-steps">' + steps(n.id).map(function (s, i) { return '<div style="--i:' + i + '"><b>0' + (i + 1) + "</b><span>" + s + "</span></div>"; }).join("") + '</div><a class="btn" href="game.html#token/' + n.id + '"><span>' + (n.status === "planned" ? L("See the buyback dashboard", "查看回购面板") : L("Open in the game", "在游戏中打开")) + '</span><span class="arr">→</span></a>';
+    p.innerHTML = '<span class="mono">' + L("SYSTEM", "系统") + " 0" + (active + 1) + " · " + (n.status === "planned" ? L("PLANNED", "规划中") : L("PLAYABLE IN THE GAME", "可在游戏中体验")) + "</span><h3>" + L(n.t[0], n.t[1]) + "</h3><p>" + L(n.flow[0], n.flow[1]) + '</p><div class="eco-steps">' + steps(n.id).map(function (s, i) { return '<div style="--i:' + i + '"><b>0' + (i + 1) + "</b><span>" + s + "</span></div>"; }).join("") + '</div><a class="btn" href="game.html#token/' + n.id + '"><span>' + (n.status === "planned" ? L("See the buyback dashboard", "查看回购面板") : L("Open in the game", "在游戏中打开")) + '</span><span class="arr">→</span></a>';
   }
   function steps(id) {
     return { market: [L("Browse 4 categories", "浏览 4 个分类"), L("Confirm the purchase", "确认购买"), L("Equip — it's in the run", "装备 — 立即生效")],

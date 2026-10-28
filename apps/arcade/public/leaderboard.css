@@ -9,7 +9,6 @@
 .lb-dot.preview { background: #b98cff; box-shadow: 0 0 10px rgba(153,69,255,.7); }
 .lb-dot.offline { background: #ff6b52; }
 @keyframes lbBeat { 50% { opacity: .35; } }
-.lb-demo-note { padding: 4px 7px; border-radius: 999px; border: 1px solid var(--lb-line); color: var(--text-3, #6d6d73); font-size: 9.5px; cursor: help; }
 .lb-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 18px; border-bottom: 1px solid var(--lb-line); }
 .lb-tabs { display: flex; gap: 4px; }
 .lb-tabs button { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid transparent; background: none; color: var(--text-3, #6d6d73); cursor: pointer; font: 500 10.5px/1 var(--mono, monospace); letter-spacing: .12em; text-transform: uppercase; transition: color .2s, border-color .2s; }
@@ -43,8 +42,11 @@
 .lb-score { font-size: 14px; font-weight: 600; color: var(--text, #f4f4f2); font-variant-numeric: tabular-nums; }
 .lb-chg { font-size: 11px; color: var(--text-3, #6d6d73); }
 .lb-chg.pos { color: #14F195; } .lb-chg.neg { color: #ff6b52; } .lb-chg.new { color: #b98cff; letter-spacing: .1em; }
-.lb-row.is-demo .lb-name b { color: var(--text-2, #a3a3a8); }
 .lb-empty { padding: 40px 18px; text-align: center; color: var(--text-3, #6d6d73); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.lb-compact .lb-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; }
+.lb-empty[hidden] { display: none !important; }
+.lb-empty-cta { display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border-radius: 999px; background: linear-gradient(120deg, #9945FF, #7B61FF 45%, #14F195); color: #0b0b0d; font: 600 11px/1 var(--mono, monospace); letter-spacing: .14em; text-decoration: none; }
+.lb-empty-cta:hover { filter: brightness(1.08); }
 .lb-foot { padding: 10px 18px; border-top: 1px solid var(--lb-line); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3, #6d6d73); }
 /* compact (landing): no tools, rows fit the stage */
 .lb-compact { height: 100%; }
@@ -58,3 +60,4 @@
 }
 @media (prefers-reduced-motion: reduce) { .lb-row { transition: none; } .lb-row.up, .lb-row.down, .lb-row.enter, .lb-dot.live { animation: none; } }
 .lb-name b { text-transform: none !important; }
+.lb-compact .lb-view:has(.lb-empty:not([hidden])) { min-height: 240px; }
