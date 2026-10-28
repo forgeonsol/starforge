@@ -3,8 +3,9 @@
  * Data:
  *  - real players come from GET /api/leaderboard (best server-verified arena run per player) and are
  *    refreshed every 20 s without reloading anything;
- *  - "this device" shows your own local best when you are not on the server board yet (or no server is reachable).
- *  Only real players are listed; there are no generated profiles.
+ *  - "this device" shows your own local best when you are not on the server board yet (or no server is reachable);
+ *  - AI pilots fill open spots so the board is never empty. Each one carries an AI tag, and every real player
+ *    takes the place of the AI pilot whose score is closest to theirs: with FILL real players there are none left.
  * Rendering: rows are absolutely positioned and moved with transform transitions (FLIP-style), only the
  * visible slice of the list is in the DOM, one rAF loop drives all number tweens.
  */
@@ -19,16 +20,43 @@
 
   // seeded PRNG, used for the identicon avatars
   function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-  var entries = new Map();
+  var entries = new Map(); // real players and this device only
+
+  // ------------------------------------------------------------------ AI pilots: hold open spots until real pilots arrive
+  var FILL = 60;
+  var CALL = ["VANTA", "KESTREL", "HALCYON", "ORBIT", "EMBER", "NOVA", "ROOK", "ASTER", "CINDER", "DRIFT", "ECHO", "FLINT", "GALE", "HELIX", "ION", "JOLT", "LUMEN", "MYTH", "NYX", "ONYX", "PYRE", "QUILL", "RUNE", "SABLE", "TALON", "UMBRA", "VEX", "WISP", "ZEPHYR", "CORVID", "SOLACE", "AXIOM", "BRAMBLE", "CIPHER", "DYNAMO", "FERRO", "GRAVEL", "HALO", "INDIGO", "JACKAL"];
+  var aiRand = rng(424242), aiUsed = {}, aiSeq = 0, bots = [];
+  function aiPilot(score) {
+    var name = "";
+    for (var tries = 0; tries < 30; tries++) { name = CALL[Math.floor(aiRand() * CALL.length)] + "-" + String(1 + Math.floor(aiRand() * 98)).padStart(2, "0"); if (!aiUsed[name]) break; }
+    aiUsed[name] = 1;
+    return { id: "ai:" + (++aiSeq), name: name, score: score, kind: "ai", change: 0, joined: aiSeq };
+  }
+  for (var bi = 0; bi < FILL; bi++) {
+    var be = aiPilot(Math.round(600 + Math.pow(aiRand(), 2.4) * 23000)), bc = aiRand();
+    be.change = bc < .62 ? 0 : bc < .82 ? 1 + Math.floor(aiRand() * 3) : -(1 + Math.floor(aiRand() * 3));
+    bots.push(be);
+  }
+  /** AI pilots still holding a spot: each real entry removes the remaining AI pilot closest to its score. */
+  function seatedBots() {
+    var pool = bots.slice();
+    entries.forEach(function (h) {
+      if (!pool.length) return;
+      var best = 0, d = Infinity;
+      for (var k = 0; k < pool.length; k++) { var x = Math.abs(pool[k].score - h.score); if (x < d) { d = x; best = k; } }
+      pool.splice(best, 1);
+    });
+    return pool;
+  }
 
   // ------------------------------------------------------------------ ranking
   var ranked = [], lastUpdate = Date.now(), liveState = ONLINE ? "connecting" : "device";
   function rerank(mark) {
     var prev = new Map(ranked.map(function (e, i) { return [e.id, i + 1]; }));
-    ranked = Array.from(entries.values()).sort(function (a, b) { return b.score - a.score || a.joined - b.joined; });
+    ranked = Array.from(entries.values()).concat(seatedBots()).sort(function (a, b) { return b.score - a.score || a.joined - b.joined; });
     ranked.forEach(function (e, i) {
       var was = prev.get(e.id), now = i + 1; e.rank = now;
-      if (mark && was && was !== now) e.flash = was > now ? "up" : "down";
+      if (mark && was && was !== now) { if (e.kind === "ai") e.change = was - now; e.flash = was > now ? "up" : "down"; }
       if (mark && !was && prev.size) e.flash = "new";
     });
     lastUpdate = Date.now(); boards.forEach(function (b) { b.render(); });
@@ -60,7 +88,21 @@
     if (best > 0) entries.set("local", { id: "local", name: name, score: best, kind: "local", you: true, change: 0, joined: 1e9 }); else entries.delete("local");
   }
 
-  var visibleBoards = 0;
+  // slow AI activity: a score change or two every 7–15 s, now and then a new AI pilot joins low on the board
+  var aiTimer = null, visibleBoards = 0, nextNewcomer = Date.now() + 60000 + Math.random() * 60000;
+  function aiTick() {
+    clearTimeout(aiTimer);
+    if (!document.hidden && visibleBoards > 0) {
+      var seated = ranked.filter(function (e) { return e.kind === "ai"; }), n = Math.random() < .7 ? 1 : 2;
+      for (var i = 0; i < n && seated.length; i++) {
+        var e = seated[Math.floor(Math.pow(Math.random(), 3) * seated.length)];
+        e.score += Math.round(80 + Math.random() * (e.rank < 20 ? 500 : 1100));
+      }
+      if (Date.now() > nextNewcomer && bots.length < FILL + 30) { bots.push(aiPilot(Math.round(800 + Math.random() * 3200))); nextNewcomer = Date.now() + 70000 + Math.random() * 80000; }
+      rerank(true);
+    }
+    aiTimer = setTimeout(aiTick, 7000 + Math.random() * 8000);
+  }
 
   // ------------------------------------------------------------------ avatars: symmetric 5×5 identicon from the id
   var avCache = new Map();
@@ -117,7 +159,8 @@
   };
   Board.prototype.renderHead = function () {
     var head = this.root.querySelector(".lb-head"), state = liveState === "live" ? L("Live", "实时") : liveState === "offline" ? L("Reconnecting", "重新连接中") : liveState === "connecting" ? L("Connecting", "连接中") : L("This device", "本设备");
-    head.innerHTML = '<div class="lb-status"><i class="lb-dot ' + liveState + '"></i><span class="mono">' + state + '</span><span class="mono lb-time">' + L("Updated ", "更新于 ") + new Date(lastUpdate).toLocaleTimeString(lang() === "zh" ? "zh-CN" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + "</span></div>";
+    head.innerHTML = '<div class="lb-status"><i class="lb-dot ' + liveState + '"></i><span class="mono">' + state + '</span><span class="mono lb-time">' + L("Updated ", "更新于 ") + new Date(lastUpdate).toLocaleTimeString(lang() === "zh" ? "zh-CN" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + "</span>" +
+      (ranked.some(function (e) { return e.kind === "ai"; }) ? '<span class="mono lb-ai-note" title="' + esc(L("AI pilots hold open spots. Each real pilot takes the place of one.", "AI 飞行员占据空位，每位真实飞行员加入都会替换其中一位。")) + '">' + L("AI pilots fill open spots", "AI 飞行员填补空位") + "</span>" : "") + "</div>";
     if (!this.compact) {
       var tabs = [["10", "Top 10"], ["50", "Top 50"], ["all", L("All", "全部")]], cur = isFinite(this.tab) ? String(this.tab) : "all";
       this.root.querySelector(".lb-tabs").innerHTML = tabs.map(function (t) { return '<button role="tab" data-tab="' + t[0] + '" class="' + (t[0] === cur ? "on" : "") + '">' + t[1] + "</button>"; }).join("");
@@ -156,9 +199,9 @@
     var q = function (s) { return row.querySelector(s); };
     if (row._rank !== e.rank) { row._rank = e.rank; q(".lb-rank").textContent = "#" + String(e.rank).padStart(2, "0"); row.classList.toggle("podium", e.rank <= 3); }
     if (row._id !== e.id) { row._id = e.id; q(".lb-av").innerHTML = avatar(e); q(".lb-name b").textContent = e.name; }
-    var tag = e.kind === "local" ? '<span class="lb-tag you">' + L("YOU · THIS DEVICE", "你 · 本设备") + "</span>" : (e.you ? '<span class="lb-tag you">' + L("YOU", "你") + "</span>" : "") + '<span class="lb-tag ok" title="' + esc(L("Real player · run verified by the server", "真实玩家 · 成绩经服务器验证")) + '">✓</span>';
+    var tag = e.kind === "ai" ? '<span class="lb-tag ai" title="' + esc(L("AI pilot · holds this spot until a real pilot takes it", "AI 飞行员 · 在真实飞行员加入前占据此位")) + '">AI</span>' : e.kind === "local" ? '<span class="lb-tag you">' + L("YOU · THIS DEVICE", "你 · 本设备") + "</span>" : (e.you ? '<span class="lb-tag you">' + L("YOU", "你") + "</span>" : "") + '<span class="lb-tag ok" title="' + esc(L("Real player · run verified by the server", "真实玩家 · 成绩经服务器验证")) + '">✓</span>';
     if (row._tag !== tag) { row._tag = tag; q(".lb-name em").innerHTML = tag; }
-    row.classList.toggle("is-you", !!e.you);
+    row.classList.toggle("is-you", !!e.you); row.classList.toggle("is-ai", e.kind === "ai");
     var sc = q(".lb-score"); if (sc._v === undefined) { sc._v = e.score; sc.textContent = fmt(e.score); } else if (Math.round(sc._v) !== e.score && (!sc._t || sc._t.to !== e.score)) tweenTo(sc, sc._v, e.score);
     var c = e.kind === "real" && e.isNew ? "new" : e.change || 0, ch = q(".lb-chg"), txt = c === "new" ? "NEW" : c > 0 ? "▲ " + c : c < 0 ? "▼ " + Math.abs(c) : "—";
     if (ch.textContent !== txt) { ch.textContent = txt; ch.className = "lb-chg mono " + (c === "new" ? "new" : c > 0 ? "pos" : c < 0 ? "neg" : ""); }
@@ -173,6 +216,7 @@
   // ------------------------------------------------------------------ boot
   localEntry(); rerank(false);
   if (ONLINE) poll();
+  aiTimer = setTimeout(aiTick, 6000 + Math.random() * 6000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && ONLINE) poll(); });
   function relabel() { setTimeout(function () { boards.forEach(function (b) { b.rows.forEach(function (r) { r._tag = null; }); b.render(); }); }, 60); }
   document.addEventListener("click", function (ev) { if (ev.target.closest && ev.target.closest("[data-lang], #langToggle")) relabel(); });
