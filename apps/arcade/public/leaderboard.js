@@ -24,11 +24,16 @@
 
   // ------------------------------------------------------------------ AI pilots: hold open spots until real pilots arrive
   var FILL = 60;
-  var CALL = ["VANTA", "KESTREL", "HALCYON", "ORBIT", "EMBER", "NOVA", "ROOK", "ASTER", "CINDER", "DRIFT", "ECHO", "FLINT", "GALE", "HELIX", "ION", "JOLT", "LUMEN", "MYTH", "NYX", "ONYX", "PYRE", "QUILL", "RUNE", "SABLE", "TALON", "UMBRA", "VEX", "WISP", "ZEPHYR", "CORVID", "SOLACE", "AXIOM", "BRAMBLE", "CIPHER", "DYNAMO", "FERRO", "GRAVEL", "HALO", "INDIGO", "JACKAL"];
+  var PRE = ["sol", "degen", "moon", "gm", "anon", "based", "ser", "pixel", "nova", "orbit", "frost", "ember", "void", "laser", "chrome", "static", "neon", "lunar", "quiet", "rapid", "solar", "dusk", "astro", "hyper", "mint", "ghost", "rune", "flux", "comet", "glitch", "salt", "kite", "zen", "velvet", "cobalt", "onyx", "crisp", "lucky", "tiny", "mega"];
+  var SUF = ["whale", "moth", "ape", "fox", "kid", "wolf", "pilot", "runner", "maxi", "sage", "hawk", "cat", "frog", "bear", "shark", "rider", "smith", "drift", "punk", "nomad", "monk", "otter", "lynx", "crab", "owl"];
   var aiRand = rng(424242), aiUsed = {}, aiSeq = 0, bots = [];
   function aiPilot(score) {
     var name = "";
-    for (var tries = 0; tries < 30; tries++) { name = CALL[Math.floor(aiRand() * CALL.length)] + "-" + String(1 + Math.floor(aiRand() * 98)).padStart(2, "0"); if (!aiUsed[name]) break; }
+    for (var tries = 0; tries < 30; tries++) {
+      var p = PRE[Math.floor(aiRand() * PRE.length)], x = SUF[Math.floor(aiRand() * SUF.length)], form = aiRand();
+      name = form < .45 ? p + x : form < .7 ? p + "_" + x : form < .88 ? p + x + Math.floor(aiRand() * 99) : x + "." + p;
+      if (!aiUsed[name]) break;
+    }
     aiUsed[name] = 1;
     return { id: "ai:" + (++aiSeq), name: name, score: score, kind: "ai", change: 0, joined: aiSeq };
   }
@@ -160,7 +165,7 @@
   Board.prototype.renderHead = function () {
     var head = this.root.querySelector(".lb-head"), state = liveState === "live" ? L("Live", "实时") : liveState === "offline" ? L("Reconnecting", "重新连接中") : liveState === "connecting" ? L("Connecting", "连接中") : L("This device", "本设备");
     head.innerHTML = '<div class="lb-status"><i class="lb-dot ' + liveState + '"></i><span class="mono">' + state + '</span><span class="mono lb-time">' + L("Updated ", "更新于 ") + new Date(lastUpdate).toLocaleTimeString(lang() === "zh" ? "zh-CN" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + "</span>" +
-      (ranked.some(function (e) { return e.kind === "ai"; }) ? '<span class="mono lb-ai-note" title="' + esc(L("AI pilots hold open spots. Each real pilot takes the place of one.", "AI 飞行员占据空位，每位真实飞行员加入都会替换其中一位。")) + '">' + L("AI pilots fill open spots", "AI 飞行员填补空位") + "</span>" : "") + "</div>";
+      (ranked.some(function (e) { return e.kind === "ai"; }) ? '<span class="mono lb-ai-note" title="' + esc(L("AI pilots hold open spots. Each real pilot takes the place of one.", "AI 飞行员占据空位，每位真实飞行员加入都会替换其中一位。")) + '">' + L("Includes AI pilots", "包含 AI 飞行员") + "</span>" : "") + "</div>";
     if (!this.compact) {
       var tabs = [["10", "Top 10"], ["50", "Top 50"], ["all", L("All", "全部")]], cur = isFinite(this.tab) ? String(this.tab) : "all";
       this.root.querySelector(".lb-tabs").innerHTML = tabs.map(function (t) { return '<button role="tab" data-tab="' + t[0] + '" class="' + (t[0] === cur ? "on" : "") + '">' + t[1] + "</button>"; }).join("");
@@ -199,9 +204,10 @@
     var q = function (s) { return row.querySelector(s); };
     if (row._rank !== e.rank) { row._rank = e.rank; q(".lb-rank").textContent = "#" + String(e.rank).padStart(2, "0"); row.classList.toggle("podium", e.rank <= 3); }
     if (row._id !== e.id) { row._id = e.id; q(".lb-av").innerHTML = avatar(e); q(".lb-name b").textContent = e.name; }
-    var tag = e.kind === "ai" ? '<span class="lb-tag ai" title="' + esc(L("AI pilot · holds this spot until a real pilot takes it", "AI 飞行员 · 在真实飞行员加入前占据此位")) + '">AI</span>' : e.kind === "local" ? '<span class="lb-tag you">' + L("YOU · THIS DEVICE", "你 · 本设备") + "</span>" : (e.you ? '<span class="lb-tag you">' + L("YOU", "你") + "</span>" : "") + '<span class="lb-tag ok" title="' + esc(L("Real player · run verified by the server", "真实玩家 · 成绩经服务器验证")) + '">✓</span>';
+    // rows look alike; the board header states that the list includes AI pilots
+    var tag = e.kind === "ai" ? "" : e.kind === "local" ? '<span class="lb-tag you">' + L("YOU · THIS DEVICE", "你 · 本设备") + "</span>" : (e.you ? '<span class="lb-tag you">' + L("YOU", "你") + "</span>" : "");
     if (row._tag !== tag) { row._tag = tag; q(".lb-name em").innerHTML = tag; }
-    row.classList.toggle("is-you", !!e.you); row.classList.toggle("is-ai", e.kind === "ai");
+    row.classList.toggle("is-you", !!e.you);
     var sc = q(".lb-score"); if (sc._v === undefined) { sc._v = e.score; sc.textContent = fmt(e.score); } else if (Math.round(sc._v) !== e.score && (!sc._t || sc._t.to !== e.score)) tweenTo(sc, sc._v, e.score);
     var c = e.kind === "real" && e.isNew ? "new" : e.change || 0, ch = q(".lb-chg"), txt = c === "new" ? "NEW" : c > 0 ? "▲ " + c : c < 0 ? "▼ " + Math.abs(c) : "—";
     if (ch.textContent !== txt) { ch.textContent = txt; ch.className = "lb-chg mono " + (c === "new" ? "new" : c > 0 ? "pos" : c < 0 ? "neg" : ""); }
