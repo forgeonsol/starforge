@@ -17,7 +17,6 @@
   <img alt="license" src="https://img.shields.io/badge/license-all%20rights%20reserved-1f1f24" />
 </p>
 
-<p align="center"><a href="README.ru.md">Русская версия</a></p>
 
 ![Landing](.github/media/landing.png)
 
@@ -110,7 +109,7 @@ apps/
 packages/
   brand/                  logo, favicon, color tokens
 infra/                    compose stack, Caddyfile, server setup, deploy and backup scripts
-docs/                     security model (docs/ru — Russian guides)
+docs/                     security model and operator guides
 .github/                  CI and README media
 ```
 
@@ -142,7 +141,7 @@ cd infra && cp .env.example .env && nano .env          # DOMAIN, ACME_EMAIL
 docker compose up -d --build
 ```
 
-Full guide: [DEPLOY.md](DEPLOY.md) · по-русски: [docs/ru/VPS-RU.md](docs/ru/VPS-RU.md).
+Full guide: [DEPLOY.md](DEPLOY.md).
 
 ## Security
 
