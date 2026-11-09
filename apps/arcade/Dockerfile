@@ -1,5 +1,5 @@
 # $FORGE self-hosted app: static site + arena API on Node 22 and SQLite. No npm install needed.
-FROM node:22-alpine
+FROM node:26-alpine
 
 WORKDIR /app
 # only what the server needs; the Next/Cloudflare build files stay out of the image
